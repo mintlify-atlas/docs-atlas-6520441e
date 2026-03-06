@@ -1,0 +1,605 @@
+---
+title: Models & Relationships
+description: Eloquent models, database relationships, and data management in the Bethlemitas platform
+---
+
+## Overview
+
+The Bethlemitas platform uses Eloquent ORM to manage database interactions. Models are organized around three core domains: **Users**, **Academic Structure**, and **Psycho-orientation Services**.
+
+## User Models
+
+### Users_teacher
+
+The primary user model representing teachers, psychologists, and coordinators. Extends Laravel's `Authenticatable` class.
+
+```php
+namespace App\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
+
+class Users_teacher extends Authenticatable
+{
+    use HasFactory, HasRoles, Notifiable;
+
+    protected $table = 'users_teachers';
+    protected $guard_name = 'web';
+
+    protected $fillable = [
+        'name',
+        'lastname',
+        'email',
+        'password',
+        'document',
+        'phone',
+        'id_state',
+        'group_director',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+}
+```
+
+See app/Models/Users_teacher.php:10-32
+
+#### Key Relationships
+
+<Accordion title="State Relationship">
+```php
+// Estado del usuario (1 = activo, 2 = PIAR)
+public function state()
+{
+    return $this->belongsTo(State::class, 'id_state');
+}
+```
+See app/Models/Users_teacher.php:39-42
+
+Each teacher has a state that determines if they can access the system.
+</Accordion>
+
+<Accordion title="Areas and Groups (Many-to-Many)">
+```php
+// Áreas asignadas al docente
+public function areas()
+{
+    return $this->belongsToMany(
+        Area::class,
+        'teachers_areas_groups',
+        'id_teacher',
+        'id_area'
+    )->withPivot('id_group');
+}
+
+// Grupos asignados al docente
+public function groups()
+{
+    return $this->belongsToMany(
+        Group::class,
+        'teachers_areas_groups',
+        'id_teacher',
+        'id_group'
+    )->withPivot('id_area');
+}
+```
+See app/Models/Users_teacher.php:56-74
+
+Teachers are assigned to areas (subjects) and groups (classes) through a three-way pivot table.
+</Accordion>
+
+<Accordion title="Degrees for Psychologists">
+```php
+// Relación directa a la tabla intermedia
+public function loadDegrees()
+{
+    return $this->hasMany(Users_load_degree::class, 'id_user');
+}
+
+// Relación limpia a grados
+public function degrees()
+{
+    return $this->belongsToMany(
+        Degree::class,
+        'users_load_degrees',
+        'id_user',
+        'id_degree'
+    );
+}
+```
+See app/Models/Users_teacher.php:87-101
+
+Psychologists are assigned to specific grade levels to manage student referrals.
+</Accordion>
+
+#### Query Scopes
+
+Reusable query filters for common user states:
+
+```php
+// Usuarios activos
+public function scopeActivos($query)
+{
+    return $query->where('id_state', 1);
+}
+
+// Usuarios PIAR
+public function scopePiar($query)
+{
+    return $query->where('id_state', 2);
+}
+
+// Solo docentes, psicoorientadores o coordinador
+public function scopeDocentesPsicoCoordinador($query)
+{
+    return $query->whereHas('roles', function ($q) {
+        $q->whereIn('name', [
+            'docente',
+            'psicoorientador',
+            'coordinador'
+        ]);
+    });
+}
+```
+
+See app/Models/Users_teacher.php:108-129
+
+**Usage Example:**
+```php
+$activeTeachers = Users_teacher::activos()->get();
+$psychologists = Users_teacher::role('psicoorientador')->get();
+```
+
+### Users_student
+
+Represents student records in the system.
+
+```php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Spatie\Permission\Traits\HasRoles;
+
+class Users_student extends Model
+{
+    use HasFactory, HasRoles;
+
+    protected $guard_name = 'web';
+
+    protected $fillable = [
+        'number_documment',
+        'name',
+        'last_name',
+        'age',
+        'birthplace',
+        'address',
+        'type_documment',
+        'phone',
+        'email',
+        'victim_conflict',
+        'id_degree',
+        'id_group',
+        'id_institution',
+        'sent_by',
+        'id_state',
+        'activation_period',
+    ];
+}
+```
+
+See app/Models/Users_student.php:10-33
+
+#### Student Relationships
+
+<Accordion title="Teacher and Academic Structure">
+```php
+// Relación con el modelo Users_teacher (quien remitió)
+public function teacher()
+{
+    return $this->belongsTo(Users_teacher::class, 'sent_by');
+}
+
+// Relación con el modelo Degree
+public function degree()
+{
+    return $this->belongsTo(Degree::class, 'id_degree');
+}
+
+// Relación con el modelo Group
+public function group()
+{
+    return $this->belongsTo(Group::class, 'id_group');
+}
+
+// Relación con el modelo Institution
+public function institution()
+{
+    return $this->belongsTo(Institution::class, 'id_institution');
+}
+```
+See app/Models/Users_student.php:38-53
+</Accordion>
+
+<Accordion title="Referrals (One-to-Many)">
+```php
+// Relación con el modelo Referral
+public function referrals()
+{
+    return $this->hasMany(Referral::class, 'id_user_student');
+}
+
+// Obtener el registro más reciente de referrals asociado a cada estudiante.
+public function latestReferral()
+{
+    return $this->hasOne(Referral::class, 'id_user_student')->latestOfMany();
+}
+```
+See app/Models/Users_student.php:64-79
+
+Students can have multiple referrals over time. The `latestReferral()` method provides quick access to the most recent one.
+</Accordion>
+
+<Accordion title="State Relationship">
+```php
+// Relación con el modelo State
+public function states()
+{
+    return $this->belongsTo(State::class, 'id_state');
+}
+```
+See app/Models/Users_student.php:70-73
+
+Possible states: **activo** (under review), **en PIAR** (individualized plan), **en DUA** (universal design).
+</Accordion>
+
+## Psycho-orientation Models
+
+### Referral
+
+Represents a student referral from a teacher to the psychologist.
+
+```php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Referral extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'id_user_student',
+        'id_user_teacher',
+        'reason',
+        'observation',
+        'strategies',
+        'annex_one',
+        'course',
+    ];
+
+    // Relacion con la tabla de estudiantes
+    public function user_student() {
+        return $this->belongsTo(Users_student::class, 'id_user_student');
+    }
+
+    // Relacion con la tabla del docente
+    public function user_teacher() {
+        return $this->belongsTo(Users_teacher::class, 'id_user_teacher');
+    }
+}
+```
+
+See app/Models/Referral.php:8-33
+
+<Note>
+Referrals connect teachers and students, documenting the reason for psycho-orientation and strategies already attempted.
+</Note>
+
+### Psychoorientation
+
+The psychological evaluation report created by the psychologist.
+
+```php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Psychoorientation extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'psychologist_writes',
+        'id_user_student',
+        'age_student',
+        'group_student',
+        'director_group_student',
+        'title_report',
+        'reason_inquiry',
+        'recomendations',
+        'annex_one',
+    ];
+
+    // Relación con la tabla de docentes (Psicoorientadora que escribe)
+    public function user_psychology()
+    {
+        return $this->belongsTo(Users_teacher::class, 'psychologist_writes');
+    }
+
+    // Relación con la tabla de estudiantes
+    public function user_student()
+    {
+        return $this->belongsTo(Users_student::class, 'id_user_student');
+    }
+}
+```
+
+See app/Models/Psychoorientation.php:8-42
+
+## Academic Structure Models
+
+### Group
+
+Represents academic groups or classes.
+
+```php
+namespace App\Models;
+
+class Group extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'group',
+    ];
+
+    public function areas()
+    {
+        return $this->belongsToMany(Area::class, 'subjects_receiveds', 
+            'id_group', 'id_area');
+    }
+
+    // Relación con teachers_areas_groups
+    public function teachersGroups()
+    {
+        return $this->hasMany(Teachers_areas_group::class, 'id_group');
+    }
+
+    // Relación con users_teachers
+    public function teachers()
+    {
+        return $this->belongsToMany(Users_teacher::class, 'users_load_groups', 
+            'id_group', 'id_user_teacher');
+    }
+}
+```
+
+See app/Models/Group.php:8-38
+
+### Degree
+
+Represents grade levels in the school.
+
+```php
+namespace App\Models;
+
+class Degree extends Model
+{
+    use HasFactory;
+
+    protected $table = 'degrees';
+
+    protected $fillable = [
+        'degree',
+    ];
+
+    // Usuarios (psicoorientadores / docentes) asignados a este grado
+    public function users_load_degrees()
+    {
+        return $this->hasMany(
+            Users_load_degree::class,
+            'id_degree'
+        );
+    }
+}
+```
+
+See app/Models/Degree.php:9-34
+
+### Area
+
+Represents subject areas (e.g., Mathematics, Language Arts).
+
+```php
+namespace App\Models;
+
+class Area extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'name_area',
+    ];
+
+    // Relación con teachers_areas_groups
+    public function teachersGroups()
+    {
+        return $this->hasMany(Teachers_areas_group::class, 'id_areas');
+    }
+
+    // Relación con users_teachers
+    public function teachers()
+    {
+        return $this->belongsToMany(Users_teacher::class, 
+            'teachers_areas_groups', 'id_area', 'id_teacher');
+    }
+}
+```
+
+See app/Models/Area.php:8-27
+
+### State
+
+Defines user and student states in the system.
+
+```php
+namespace App\Models;
+
+class State extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'state',
+    ];
+}
+```
+
+See app/Models/State.php:8-16
+
+**Common States:**
+- `activo`: Active user or student under review
+- `en PIAR`: Student with individualized support plan
+- `en DUA`: Student under universal design approach
+- `bloqueado`: Suspended/blocked user
+
+## Relationship Diagram
+
+```
+Users_teacher (Teachers/Psychologists)
+    ├── belongsTo State
+    ├── belongsTo Group (as director)
+    ├── belongsToMany Area (via teachers_areas_groups)
+    ├── belongsToMany Group (via teachers_areas_groups)
+    └── belongsToMany Degree (via users_load_degrees)
+
+Users_student (Students)
+    ├── belongsTo Users_teacher (sent_by)
+    ├── belongsTo State
+    ├── belongsTo Degree
+    ├── belongsTo Group
+    ├── belongsTo Institution
+    ├── hasMany Referral
+    └── hasOne Referral (latestReferral)
+
+Referral
+    ├── belongsTo Users_student
+    └── belongsTo Users_teacher
+
+Psychoorientation
+    ├── belongsTo Users_student
+    └── belongsTo Users_teacher (psychologist_writes)
+```
+
+## Best Practices
+
+### Eager Loading
+
+Always eager load relationships to avoid N+1 queries:
+
+```php
+// Bad - N+1 queries
+$students = Users_student::all();
+foreach ($students as $student) {
+    echo $student->degree->degree; // New query each iteration
+}
+
+// Good - Single query
+$students = Users_student::with('degree', 'group', 'latestReferral')->get();
+foreach ($students as $student) {
+    echo $student->degree->degree; // No additional queries
+}
+```
+
+### Using Scopes
+
+Leverage model scopes for cleaner queries:
+
+```php
+// Instead of:
+$teachers = Users_teacher::where('id_state', 1)
+    ->whereHas('roles', function($q) {
+        $q->where('name', 'docente');
+    })->get();
+
+// Use:
+$teachers = Users_teacher::activos()->role('docente')->get();
+```
+
+### Transaction Safety
+
+Wrap related operations in database transactions:
+
+```php
+DB::beginTransaction();
+try {
+    $user = new Users_student();
+    $user->save();
+
+    $referral = new Referral();
+    $referral->id_user_student = $user->id;
+    $referral->save();
+
+    DB::commit();
+} catch (\Exception $e) {
+    DB::rollback();
+    // Handle error
+}
+```
+
+See app/Http/Controllers/CreateReferralController.php:90-126
+
+<Warning>
+Always use database transactions when creating related records to maintain data integrity.
+</Warning>
+
+## Common Query Patterns
+
+### Filter Students by State
+
+```php
+$query = Users_student::whereHas('states', function ($q) use ($state) {
+    $q->where('state', $state);
+})->whereIn('id_degree', $load_degree);
+
+if ($request->filled('search')) {
+    $search = $request->search;
+    $query->where(function ($q) use ($search) {
+        $q->where('name', 'LIKE', "%$search%")
+          ->orWhere('last_name', 'LIKE', "%$search%")
+          ->orWhereRaw("CONCAT(name,' ',last_name) LIKE ?", ["%$search%"]);
+    });
+}
+
+$students = $query->orderBy('name')->orderBy('last_name')->paginate(15);
+```
+
+See app/Http/Controllers/PsicoController.php:31-49
+
+### Get Latest Referral
+
+```php
+$info_referral = Referral::where('id_user_student', $id)
+    ->latest()
+    ->first();
+```
+
+See app/Http/Controllers/PsicoController.php:145-147
+
+### Check Psychologist Assignment
+
+```php
+$degreeLoad = Users_load_degree::where('id_degree', $request->input('degree'))->first();
+
+if (!$degreeLoad) {
+    return redirect()->back()->with('error', 
+        'No se encontró un psicoorientador asignado para el grado seleccionado');
+}
+
+$id_psico = $degreeLoad->id_user;
+```
+
+See app/Http/Controllers/CreateReferralController.php:52-59

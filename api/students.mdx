@@ -1,0 +1,721 @@
+---
+title: 'Students API'
+description: 'Manage student information and educational status in the Bethlemitas platform'
+icon: 'graduation-cap'
+---
+
+## Overview
+
+The Students API manages student records that are created through the referral process. Students can be in different states: active, PIAR, or DUA. Both teachers and psycho-orientators can interact with student records.
+
+---
+
+## List Students (Teacher)
+
+<Card title="GET /index/students/remitted" icon="list">
+  Lists students referred by the authenticated teacher with "activo" state.
+</Card>
+
+### Endpoint
+
+```
+GET /index/students/remitted
+```
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Docente** role
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="search" type="string" optional>
+  Search by student name, last name, or document number
+</ParamField>
+
+<ParamField query="page" type="integer" optional>
+  Page number for pagination (15 students per page)
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://bethlemitas.example.com/index/students/remitted?search=Juan" \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/index/students/remitted?search=Juan', {
+  method: 'GET',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="students" type="array">
+  Paginated array of student objects
+  
+  <Expandable title="Student Object">
+    <ResponseField name="id" type="integer">
+      Student ID
+    </ResponseField>
+    
+    <ResponseField name="number_documment" type="string">
+      Student's document number
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Student's first name
+    </ResponseField>
+    
+    <ResponseField name="last_name" type="string">
+      Student's last name
+    </ResponseField>
+    
+    <ResponseField name="age" type="integer|null">
+      Student's age
+    </ResponseField>
+    
+    <ResponseField name="id_degree" type="integer">
+      Degree ID
+    </ResponseField>
+    
+    <ResponseField name="id_group" type="integer">
+      Group ID
+    </ResponseField>
+    
+    <ResponseField name="sent_by" type="integer">
+      Teacher ID who referred the student
+    </ResponseField>
+    
+    <ResponseField name="id_state" type="integer">
+      Current state ID (1 = activo, 3 = en PIAR, 4 = en DUA)
+    </ResponseField>
+    
+    <ResponseField name="latestReferral" type="object">
+      Most recent referral information
+    </ResponseField>
+    
+    <ResponseField name="group" type="object">
+      Group information
+      - `id`: Group ID
+      - `group`: Group name
+    </ResponseField>
+    
+    <ResponseField name="degree" type="object">
+      Degree information
+      - `id`: Degree ID
+      - `degree`: Degree name
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Implementation Details
+
+- Only returns students where `sent_by` matches authenticated teacher ID
+- Filters for students with state "activo"
+- Eager loads: latestReferral, group, degree relationships
+- Ordered alphabetically by name and last name
+- Controller: `CreateReferralController@index_student_remitted` (routes/web.php:124-125)
+
+---
+
+## List Students by State (Psycho-orientator)
+
+### List All Active Students
+
+<Card title="GET /psico/students/active" icon="users">
+  Lists all students assigned to the psycho-orientator's degrees.
+</Card>
+
+#### Endpoint
+
+```
+GET /psico/students/active
+```
+
+#### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+#### Query Parameters
+
+<ParamField query="search" type="string" optional>
+  Search by student name, last name, or document number
+</ParamField>
+
+#### Implementation Details
+
+- Returns students from all degrees assigned to the psycho-orientator
+- No state filtering (shows all students)
+- Controller: `PsicoController@index_students_active_psico` (routes/web.php:164-165)
+
+---
+
+### List Students in PIAR
+
+<Card title="GET /psico/students/piar" icon="file-medical">
+  Lists students with "en PIAR" state.
+</Card>
+
+#### Endpoint
+
+```
+GET /psico/students/piar
+```
+
+#### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+#### Query Parameters
+
+<ParamField query="search" type="string" optional>
+  Search by student name, last name, or document number
+</ParamField>
+
+#### Implementation Details
+
+- Filters for students with state "en PIAR"
+- Only shows students from assigned degrees
+- Controller: `PsicoController@index_students_piar_psico` (routes/web.php:167-168)
+
+---
+
+### List Students in DUA
+
+<Card title="GET /psico/students/dua" icon="universal-access">
+  Lists students with "en DUA" state.
+</Card>
+
+#### Endpoint
+
+```
+GET /psico/students/dua
+```
+
+#### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+#### Query Parameters
+
+<ParamField query="search" type="string" optional>
+  Search by student name, last name, or document number
+</ParamField>
+
+#### Implementation Details
+
+- Filters for students with state "en DUA"
+- Only shows students from assigned degrees
+- Controller: `PsicoController@index_students_dua_psico` (routes/web.php:170-171)
+
+---
+
+### List Remitted Students
+
+<Card title="GET /index/students/remitted/psico" icon="inbox">
+  Lists students with "activo" state pending psycho-orientation review.
+</Card>
+
+#### Endpoint
+
+```
+GET /index/students/remitted/psico
+```
+
+#### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+#### Query Parameters
+
+<ParamField query="search" type="string" optional>
+  Search by student name, last name, or document number
+</ParamField>
+
+#### Implementation Details
+
+- Only shows students with state "activo" (newly referred)
+- Filtered by psycho-orientator's assigned degrees
+- Controller: `PsicoController@index_student_remitted_psico` (routes/web.php:160-161)
+
+---
+
+## Get Student Details
+
+<Card title="GET /edit/student/{id}" icon="user">
+  Retrieves student information for editing.
+</Card>
+
+### Endpoint
+
+```
+GET /edit/student/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Student ID
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Docente** or **Psicoorientador** role
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://bethlemitas.example.com/edit/student/25 \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/edit/student/25', {
+  method: 'GET',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="student" type="object">
+  Complete student object
+</ResponseField>
+
+<ResponseField name="degrees" type="array">
+  Available degrees for selection
+</ResponseField>
+
+<ResponseField name="groups" type="array">
+  Available groups for selection
+</ResponseField>
+
+### Implementation Details
+
+- Returns 404 if student not found
+- Controller: `CreateReferralController@edit_student` (routes/web.php:145-146)
+
+---
+
+## Update Student
+
+<Card title="PUT /update/student/{id}" icon="pen-to-square">
+  Updates student information (basic data only, not referral details).
+</Card>
+
+### Endpoint
+
+```
+PUT /update/student/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Student ID to update
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Docente** or **Psicoorientador** role
+</ParamField>
+
+### Request Parameters
+
+<ParamField body="number_documment" type="string" required>
+  Document number (1-20 digits, unique except for current student)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Student's first name
+</ParamField>
+
+<ParamField body="last_name" type="string" required>
+  Student's last name
+</ParamField>
+
+<ParamField body="degree" type="integer" required>
+  Degree ID (must exist in degrees table)
+</ParamField>
+
+<ParamField body="group" type="integer" required>
+  Group ID (must exist in groups table)
+</ParamField>
+
+<ParamField body="age" type="integer" optional>
+  Student's age (minimum 0)
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X PUT https://bethlemitas.example.com/update/student/25 \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -b "laravel_session=your_session_cookie" \
+  -d "number_documment=1122334455" \
+  -d "name=Juan Carlos" \
+  -d "last_name=Pérez" \
+  -d "degree=5" \
+  -d "group=3" \
+  -d "age=10"
+```
+
+```javascript JavaScript
+const formData = new URLSearchParams({
+  number_documment: '1122334455',
+  name: 'Juan Carlos',
+  last_name: 'Pérez',
+  degree: '5',
+  group: '3',
+  age: '10'
+});
+
+fetch('https://bethlemitas.example.com/update/student/25', {
+  method: 'PUT',
+  credentials: 'include',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  },
+  body: formData
+})
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Usuario editado correctamente."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="info" type="string">
+  When no changes were detected
+  
+  ```json
+  {
+    "info": "No hubo cambios en el usuario."
+  }
+  ```
+</ResponseField>
+
+### Error Responses
+
+<ResponseField name="error" type="string">
+  ```json
+  {
+    "error": "No se encontró un psicoorientador asignado para el grado seleccionado, comunicate con cordinación académica para que asigne a un psicoorientador."
+  }
+  ```
+</ResponseField>
+
+### Implementation Details
+
+- Only updates if changes are detected
+- Validates that selected degree has an assigned psycho-orientator
+- Does not modify referral information
+- Controller: `CreateReferralController@update_student` (routes/web.php:148-149)
+
+---
+
+## Student History
+
+<Card title="GET /student/history/{id}" icon="clock-rotate-left">
+  Retrieves complete history of referrals and psychological reports for a student.
+</Card>
+
+### Endpoint
+
+```
+GET /student/history/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Student ID
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://bethlemitas.example.com/student/history/25 \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/student/history/25', {
+  method: 'GET',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="student" type="object">
+  Complete student information
+</ResponseField>
+
+<ResponseField name="referrals" type="array">
+  Paginated array of referral records (most recent first)
+  
+  <Expandable title="Referral Object">
+    <ResponseField name="id" type="integer">
+      Referral ID
+    </ResponseField>
+    
+    <ResponseField name="id_user_student" type="integer">
+      Student ID
+    </ResponseField>
+    
+    <ResponseField name="id_user_teacher" type="integer">
+      Teacher who created the referral
+    </ResponseField>
+    
+    <ResponseField name="reason" type="string">
+      Reason for referral
+    </ResponseField>
+    
+    <ResponseField name="observation" type="string">
+      Teacher's observations
+    </ResponseField>
+    
+    <ResponseField name="strategies" type="string">
+      Strategies attempted by teacher
+    </ResponseField>
+    
+    <ResponseField name="course" type="string">
+      Course/grade at time of referral
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="timestamp">
+      Referral creation date
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="reports" type="array">
+  Paginated array of psychological reports (most recent first)
+  
+  <Expandable title="Report Object">
+    <ResponseField name="id" type="integer">
+      Report ID
+    </ResponseField>
+    
+    <ResponseField name="psychologist_writes" type="integer">
+      Psycho-orientator ID who wrote the report
+    </ResponseField>
+    
+    <ResponseField name="id_user_student" type="integer">
+      Student ID
+    </ResponseField>
+    
+    <ResponseField name="title_report" type="string">
+      Report title
+    </ResponseField>
+    
+    <ResponseField name="reason_inquiry" type="string">
+      Reason for inquiry
+    </ResponseField>
+    
+    <ResponseField name="recomendations" type="string">
+      Psycho-orientator's recommendations
+    </ResponseField>
+    
+    <ResponseField name="annex_one" type="string|null">
+      Path to attached PDF document
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="timestamp">
+      Report creation date
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Implementation Details
+
+- Referrals ordered by creation date (descending)
+- Reports ordered by creation date (descending)
+- 10 items per page for each list
+- Controller: `PsicoController@show_student_history` (routes/web.php:185-186)
+
+---
+
+## List Students for Minutes (Teacher)
+
+<Card title="GET /addMinutes" icon="file-lines">
+  Lists students in PIAR or DUA status from teacher's assigned groups for adding meeting minutes.
+</Card>
+
+### Endpoint
+
+```
+GET /addMinutes
+```
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Docente** role
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="search" type="string" optional>
+  Search by student name, last name, or document number
+</ParamField>
+
+<ParamField query="page" type="integer" optional>
+  Page number for pagination (15 students per page)
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://bethlemitas.example.com/addMinutes?search=María" \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/addMinutes?search=María', {
+  method: 'GET',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="students" type="array">
+  Paginated array of students in PIAR or DUA status from teacher's groups
+</ResponseField>
+
+### Implementation Details
+
+- Only shows students from groups where teacher is assigned (via `users_load_groups`)
+- Filters for students with state "en PIAR" or "en DUA"
+- Ordered alphabetically by name and last name
+- Controller: `CreateReferralController@addMinutes` (routes/web.php:127-128)
+
+---
+
+## Accept Student to PIAR
+
+<Card title="PUT /accept/student" icon="check">
+  Changes a student's state to "en PIAR" after psycho-orientator review.
+</Card>
+
+### Endpoint
+
+```
+PUT /accept/student
+```
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Parameters
+
+<ParamField body="student_id" type="integer" required>
+  Student ID to accept into PIAR
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X PUT https://bethlemitas.example.com/accept/student \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -b "laravel_session=your_session_cookie" \
+  -d "student_id=25"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/accept/student', {
+  method: 'PUT',
+  credentials: 'include',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  },
+  body: new URLSearchParams({
+    student_id: '25'
+  })
+})
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  Success message confirming state change
+</ResponseField>
+
+### Implementation Details
+
+- Changes student's `id_state` to the ID corresponding to "en PIAR"
+- Controller: `PsicoController@accept_student_to_piar` (routes/web.php:200-201)
+
+---
+
+## Student States
+
+Students can have the following states:
+
+<CardGroup cols={2}>
+  <Card title="Activo" icon="circle-dot">
+    Initial state when referred. Pending psycho-orientator review.
+  </Card>
+  
+  <Card title="En PIAR" icon="file-medical">
+    Student accepted into PIAR (Individualized Educational Adjustments Plan) program.
+  </Card>
+  
+  <Card title="En DUA" icon="universal-access">
+    Student in DUA (Universal Design for Learning) program.
+  </Card>
+  
+  <Card title="Suspendido" icon="ban">
+    Student account suspended (cannot be referred).
+  </Card>
+</CardGroup>
+
+### State Transition Rules
+
+1. New students start with "activo" state upon referral
+2. Psycho-orientator can accept students to "en PIAR" state
+3. Students with "activo", "en PIAR", or "en DUA" states cannot be referred again
+4. Only psycho-orientators can change student states via psychological reports

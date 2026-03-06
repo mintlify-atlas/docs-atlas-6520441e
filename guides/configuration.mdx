@@ -1,0 +1,498 @@
+---
+title: 'Configuration'
+description: 'Complete guide to configuring the Bethlemitas platform'
+icon: 'gear'
+---
+
+## Environment Configuration
+
+The Bethlemitas platform uses environment variables for configuration. All settings are managed through the `.env` file located in the project root.
+
+<Warning>
+  Never commit your `.env` file to version control. It contains sensitive credentials and should remain private.
+</Warning>
+
+## Core Application Settings
+
+### Application Identity
+
+```bash .env
+APP_NAME=Laravel
+APP_ENV=local
+APP_KEY=base64:6c3iYCxJ9tbn9rvXhI179ce3OVLqk+pT2Ahsq7xGXLE=
+APP_DEBUG=true
+APP_TIMEZONE=UTC
+APP_URL=http://localhost
+```
+
+<ParamField path="APP_NAME" type="string" default="Laravel">
+  The application name displayed in emails, notifications, and UI elements
+</ParamField>
+
+<ParamField path="APP_ENV" type="string" default="local">
+  Environment type: `local`, `staging`, or `production`
+</ParamField>
+
+<ParamField path="APP_KEY" type="string" required>
+  Application encryption key. Generate using `php artisan key:generate`
+</ParamField>
+
+<ParamField path="APP_DEBUG" type="boolean" default="false">
+  Enable detailed error messages. **Always set to `false` in production**
+</ParamField>
+
+<ParamField path="APP_TIMEZONE" type="string" default="UTC">
+  Application timezone. Example: `America/Bogota`, `America/New_York`
+</ParamField>
+
+<ParamField path="APP_URL" type="string" required>
+  Base URL of your application. Used for generating links and asset URLs
+</ParamField>
+
+### Localization
+
+```bash .env
+APP_LOCALE=en
+APP_FALLBACK_LOCALE=en
+APP_FAKER_LOCALE=en_US
+```
+
+<Note>
+  For Spanish localization, set `APP_LOCALE=es` and `APP_FAKER_LOCALE=es_ES`
+</Note>
+
+## Database Configuration
+
+### MySQL Connection
+
+The platform is configured to use MySQL by default:
+
+```bash .env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=piarmanager
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+<ParamField path="DB_CONNECTION" type="string" default="mysql">
+  Database driver: `mysql`, `pgsql`, `sqlite`, `sqlsrv`
+</ParamField>
+
+<ParamField path="DB_HOST" type="string" default="127.0.0.1">
+  Database host address
+</ParamField>
+
+<ParamField path="DB_PORT" type="integer" default="3306">
+  Database port (3306 for MySQL, 5432 for PostgreSQL)
+</ParamField>
+
+<ParamField path="DB_DATABASE" type="string" required>
+  Database name. Default is `piarmanager`
+</ParamField>
+
+<ParamField path="DB_USERNAME" type="string" required>
+  Database user with appropriate permissions
+</ParamField>
+
+<ParamField path="DB_PASSWORD" type="string">
+  Database password (leave empty for development if no password set)
+</ParamField>
+
+### Supported Database Drivers
+
+The application supports multiple database systems as defined in `config/database.php`:
+
+<Tabs>
+  <Tab title="MySQL">
+    ```bash .env
+    DB_CONNECTION=mysql
+    DB_HOST=127.0.0.1
+    DB_PORT=3306
+    DB_DATABASE=piarmanager
+    DB_USERNAME=root
+    DB_PASSWORD=your_password
+    DB_CHARSET=utf8mb4
+    DB_COLLATION=utf8mb4_unicode_ci
+    ```
+  </Tab>
+  
+  <Tab title="PostgreSQL">
+    ```bash .env
+    DB_CONNECTION=pgsql
+    DB_HOST=127.0.0.1
+    DB_PORT=5432
+    DB_DATABASE=piarmanager
+    DB_USERNAME=postgres
+    DB_PASSWORD=your_password
+    DB_CHARSET=utf8
+    ```
+  </Tab>
+  
+  <Tab title="SQLite">
+    ```bash .env
+    DB_CONNECTION=sqlite
+    DB_DATABASE=/path/to/database.sqlite
+    ```
+  </Tab>
+</Tabs>
+
+## Session Configuration
+
+```bash .env
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=null
+```
+
+<ParamField path="SESSION_DRIVER" type="string" default="database">
+  Session storage: `file`, `database`, `redis`, `memcached`, `cookie`
+</ParamField>
+
+<ParamField path="SESSION_LIFETIME" type="integer" default="120">
+  Session timeout in minutes
+</ParamField>
+
+<Note>
+  The platform uses database sessions by default. Ensure the sessions table is migrated.
+</Note>
+
+## Cache Configuration
+
+```bash .env
+CACHE_STORE=database
+CACHE_PREFIX=
+```
+
+<ParamField path="CACHE_STORE" type="string" default="database">
+  Cache driver: `file`, `database`, `redis`, `memcached`, `array`
+</ParamField>
+
+For production environments, Redis is recommended for better performance:
+
+```bash .env
+CACHE_STORE=redis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+```
+
+## Queue Configuration
+
+```bash .env
+QUEUE_CONNECTION=database
+```
+
+<ParamField path="QUEUE_CONNECTION" type="string" default="database">
+  Queue driver: `sync`, `database`, `redis`, `beanstalkd`, `sqs`
+</ParamField>
+
+For production, use `database` or `redis` queue drivers:
+
+<CodeGroup>
+  ```bash Database Queue
+  QUEUE_CONNECTION=database
+  ```
+
+  ```bash Redis Queue
+  QUEUE_CONNECTION=redis
+  REDIS_CLIENT=phpredis
+  REDIS_HOST=127.0.0.1
+  REDIS_PORT=6379
+  ```
+</CodeGroup>
+
+Start the queue worker:
+
+```bash
+php artisan queue:work
+```
+
+## Mail Configuration
+
+```bash .env
+MAIL_MAILER=log
+MAIL_HOST=127.0.0.1
+MAIL_PORT=2525
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS="hello@example.com"
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+### Development: Log Driver
+
+In development, emails are logged to `storage/logs/laravel.log`:
+
+```bash .env
+MAIL_MAILER=log
+```
+
+### Production: SMTP Configuration
+
+<CodeGroup>
+  ```bash Gmail
+  MAIL_MAILER=smtp
+  MAIL_HOST=smtp.gmail.com
+  MAIL_PORT=587
+  MAIL_USERNAME=your-email@gmail.com
+  MAIL_PASSWORD=your-app-password
+  MAIL_ENCRYPTION=tls
+  MAIL_FROM_ADDRESS=your-email@gmail.com
+  MAIL_FROM_NAME="Bethlemitas"
+  ```
+
+  ```bash Mailgun
+  MAIL_MAILER=mailgun
+  MAILGUN_DOMAIN=your-domain.mailgun.org
+  MAILGUN_SECRET=your-mailgun-api-key
+  MAIL_FROM_ADDRESS=noreply@yourdomain.com
+  MAIL_FROM_NAME="Bethlemitas"
+  ```
+
+  ```bash SendGrid
+  MAIL_MAILER=smtp
+  MAIL_HOST=smtp.sendgrid.net
+  MAIL_PORT=587
+  MAIL_USERNAME=apikey
+  MAIL_PASSWORD=your-sendgrid-api-key
+  MAIL_ENCRYPTION=tls
+  ```
+</CodeGroup>
+
+## Logging Configuration
+
+```bash .env
+LOG_CHANNEL=stack
+LOG_STACK=single
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=debug
+```
+
+<ParamField path="LOG_CHANNEL" type="string" default="stack">
+  Logging channel: `stack`, `single`, `daily`, `slack`, `syslog`
+</ParamField>
+
+<ParamField path="LOG_LEVEL" type="string" default="debug">
+  Minimum log level: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`
+</ParamField>
+
+### Production Logging
+
+For production, use daily logs with rotation:
+
+```bash .env
+LOG_CHANNEL=daily
+LOG_LEVEL=error
+```
+
+## Security Settings
+
+### Password Hashing
+
+```bash .env
+BCRYPT_ROUNDS=12
+```
+
+<ParamField path="BCRYPT_ROUNDS" type="integer" default="12">
+  BCrypt hashing rounds. Higher = more secure but slower (10-12 recommended)
+</ParamField>
+
+<Warning>
+  In production, ensure `BCRYPT_ROUNDS` is at least 10 for adequate security.
+</Warning>
+
+## File Storage Configuration
+
+```bash .env
+FILESYSTEM_DISK=local
+```
+
+<ParamField path="FILESYSTEM_DISK" type="string" default="local">
+  Default storage disk: `local`, `public`, `s3`
+</ParamField>
+
+### AWS S3 Configuration
+
+For cloud storage, configure S3:
+
+```bash .env
+FILESYSTEM_DISK=s3
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=your-bucket-name
+AWS_USE_PATH_STYLE_ENDPOINT=false
+```
+
+## Broadcasting Configuration
+
+```bash .env
+BROADCAST_CONNECTION=log
+```
+
+For real-time features, configure Pusher or Laravel WebSockets:
+
+```bash .env
+BROADCAST_CONNECTION=pusher
+PUSHER_APP_ID=your-app-id
+PUSHER_APP_KEY=your-app-key
+PUSHER_APP_SECRET=your-app-secret
+PUSHER_APP_CLUSTER=mt1
+```
+
+## Redis Configuration
+
+```bash .env
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+```
+
+<Note>
+  Redis is optional but recommended for production environments for caching and queues.
+</Note>
+
+## Maintenance Mode
+
+```bash .env
+APP_MAINTENANCE_DRIVER=file
+# APP_MAINTENANCE_STORE=database
+```
+
+Put the application in maintenance mode:
+
+```bash
+php artisan down --secret="bypass-token"
+```
+
+Access during maintenance: `https://yoursite.com/bypass-token`
+
+Bring the application back up:
+
+```bash
+php artisan up
+```
+
+## Permission Package Configuration
+
+The platform uses Spatie Laravel Permission. Configuration is in `config/permission.php`:
+
+```php
+'models' => [
+    'permission' => Spatie\Permission\Models\Permission::class,
+    'role' => Spatie\Permission\Models\Role::class,
+],
+
+'table_names' => [
+    'roles' => 'roles',
+    'permissions' => 'permissions',
+    'model_has_permissions' => 'model_has_permissions',
+    'model_has_roles' => 'model_has_roles',
+    'role_has_permissions' => 'role_has_permissions',
+],
+```
+
+The system includes four default roles:
+- `coordinador` - Coordinator role
+- `docente` - Teacher role
+- `psicoorientador` - Psycho-orientation specialist
+- `estudiante` - Student role
+
+## Vite Frontend Configuration
+
+```bash .env
+VITE_APP_NAME="${APP_NAME}"
+```
+
+Vite configuration is in `vite.config.js`. The build process uses:
+- Tailwind CSS 3.4+
+- PostCSS with Autoprefixer
+- Laravel Vite Plugin
+
+Build assets:
+
+```bash
+npm run build
+```
+
+## Configuration Caching
+
+For production, cache configuration for better performance:
+
+```bash
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+Clear caches:
+
+```bash
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+php artisan cache:clear
+```
+
+## Environment-Specific Configuration
+
+<Tabs>
+  <Tab title="Local Development">
+    ```bash .env
+    APP_ENV=local
+    APP_DEBUG=true
+    LOG_LEVEL=debug
+    MAIL_MAILER=log
+    CACHE_STORE=file
+    QUEUE_CONNECTION=sync
+    SESSION_DRIVER=file
+    ```
+  </Tab>
+  
+  <Tab title="Staging">
+    ```bash .env
+    APP_ENV=staging
+    APP_DEBUG=true
+    LOG_LEVEL=info
+    MAIL_MAILER=smtp
+    CACHE_STORE=database
+    QUEUE_CONNECTION=database
+    SESSION_DRIVER=database
+    ```
+  </Tab>
+  
+  <Tab title="Production">
+    ```bash .env
+    APP_ENV=production
+    APP_DEBUG=false
+    LOG_LEVEL=error
+    MAIL_MAILER=smtp
+    CACHE_STORE=redis
+    QUEUE_CONNECTION=redis
+    SESSION_DRIVER=redis
+    ```
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Setup" icon="database" href="/guides/database-setup">
+    Learn about database migrations and seeders
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy to production servers
+  </Card>
+  <Card title="Installation" icon="download" href="/guides/installation">
+    Return to installation guide
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/authentication">
+    Explore API endpoints
+  </Card>
+</CardGroup>

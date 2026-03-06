@@ -1,0 +1,341 @@
+---
+title: 'Installation'
+description: 'Complete guide to installing the Bethlemitas platform on your local machine'
+icon: 'download'
+---
+
+## Prerequisites
+
+Before installing Bethlemitas, ensure your system meets the following requirements:
+
+<CardGroup cols={2}>
+  <Card title="PHP 8.2+" icon="php">
+    Required for Laravel 11 framework
+  </Card>
+  <Card title="Composer" icon="box">
+    PHP dependency manager
+  </Card>
+  <Card title="Node.js 18+" icon="node-js">
+    For frontend asset compilation
+  </Card>
+  <Card title="MySQL/MariaDB" icon="database">
+    Database server (MySQL 8.0+ or MariaDB 10.3+)
+  </Card>
+</CardGroup>
+
+<Note>
+  The platform uses Laravel 11.9+ which requires PHP 8.2 or higher. Using an older PHP version will cause compatibility issues.
+</Note>
+
+## System Requirements
+
+### PHP Extensions
+
+Ensure the following PHP extensions are installed and enabled:
+
+- `pdo_mysql` - MySQL database driver
+- `mbstring` - Multi-byte string support
+- `xml` - XML processing
+- `bcmath` - Arbitrary precision mathematics
+- `json` - JSON support
+- `openssl` - Encryption support
+- `tokenizer` - Token parsing
+- `ctype` - Character type checking
+- `fileinfo` - File information
+
+### Server Software
+
+- **Web Server**: Apache 2.4+ or Nginx 1.18+
+- **Database**: MySQL 8.0+ or MariaDB 10.3+
+- **PHP**: 8.2 or higher
+- **Composer**: 2.x
+- **Node.js**: 18.x or higher
+- **npm**: 9.x or higher
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the Bethlemitas repository to your local machine:
+
+    ```bash
+    git clone <repository-url> bethlemitas
+    cd bethlemitas
+    ```
+  </Step>
+
+  <Step title="Install PHP Dependencies">
+    Install all PHP dependencies using Composer:
+
+    ```bash
+    composer install
+    ```
+
+    This will install:
+    - Laravel Framework 11.9+
+    - Spatie Laravel Permission 6.3
+    - Laravel Tinker 2.9+
+    - Development tools (PHPUnit, Laravel Pint, etc.)
+
+    <Note>
+      If you encounter memory limit errors, increase PHP's memory limit: `php -d memory_limit=-1 /path/to/composer install`
+    </Note>
+  </Step>
+
+  <Step title="Install Frontend Dependencies">
+    Install Node.js dependencies for asset compilation:
+
+    ```bash
+    npm install
+    ```
+
+    This installs:
+    - Vite 5.0+ (build tool)
+    - Tailwind CSS 3.4+
+    - Axios for HTTP requests
+    - PostCSS and Autoprefixer
+  </Step>
+
+  <Step title="Environment Configuration">
+    Copy the example environment file and generate an application key:
+
+    ```bash
+    cp .env.example .env
+    php artisan key:generate
+    ```
+
+    The `key:generate` command creates a secure encryption key in your `.env` file. This key is used for encrypting session data, cookies, and other sensitive information.
+
+    <Warning>
+      Never commit your `.env` file to version control. It contains sensitive credentials and configuration.
+    </Warning>
+  </Step>
+
+  <Step title="Configure Database">
+    Edit the `.env` file to configure your database connection:
+
+    ```bash .env
+    DB_CONNECTION=mysql
+    DB_HOST=127.0.0.1
+    DB_PORT=3306
+    DB_DATABASE=piarmanager
+    DB_USERNAME=root
+    DB_PASSWORD=your_password
+    ```
+
+    Create the database:
+
+    ```bash
+    mysql -u root -p
+    ```
+
+    ```sql
+    CREATE DATABASE piarmanager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    EXIT;
+    ```
+  </Step>
+
+  <Step title="Run Database Migrations">
+    Execute migrations to create the database schema:
+
+    ```bash
+    php artisan migrate
+    ```
+
+    This creates all necessary tables including:
+    - Users and authentication tables
+    - Roles and permissions (Spatie)
+    - Institution data
+    - Psychoorientations and referrals
+    - Teachers, students, and groups
+    - Cache and queue tables
+
+    <Note>
+      See the [Database Setup](/guides/database-setup) guide for detailed information about the database structure.
+    </Note>
+  </Step>
+
+  <Step title="Seed Initial Data">
+    Populate the database with initial required data:
+
+    ```bash
+    php artisan db:seed
+    ```
+
+    This runs the following seeders:
+    - **RolSeeder**: Creates roles (coordinador, docente, psicoorientador, estudiante)
+    - **AreasSeeder**: Populates academic areas
+    - **DegreeSeeder**: Creates degree/grade levels
+    - **GroupSeeder**: Initializes student groups
+    - **PeriodSeeder**: Sets up academic periods
+    - **StateSeeder**: Populates state/status options
+    - **UserSeeder**: Creates initial users
+    - **DeparmetSeeder**: Adds department data
+  </Step>
+
+  <Step title="Build Frontend Assets">
+    Compile the frontend assets:
+
+    <CodeGroup>
+      ```bash Development
+      npm run dev
+      ```
+
+      ```bash Production
+      npm run build
+      ```
+    </CodeGroup>
+
+    For development, `npm run dev` starts Vite's development server with hot module replacement. For production, `npm run build` creates optimized, minified assets.
+  </Step>
+
+  <Step title="Create Storage Link">
+    Create a symbolic link from `public/storage` to `storage/app/public`:
+
+    ```bash
+    php artisan storage:link
+    ```
+
+    This allows uploaded files to be publicly accessible.
+  </Step>
+
+  <Step title="Set File Permissions">
+    Ensure proper permissions for storage and cache directories:
+
+    ```bash
+    chmod -R 775 storage bootstrap/cache
+    chown -R www-data:www-data storage bootstrap/cache
+    ```
+
+    <Note>
+      Replace `www-data` with your web server user if different (e.g., `apache`, `nginx`).
+    </Note>
+  </Step>
+
+  <Step title="Start the Development Server">
+    Launch the Laravel development server:
+
+    ```bash
+    php artisan serve
+    ```
+
+    The application will be available at `http://localhost:8000`
+
+    <Note>
+      To specify a different port: `php artisan serve --port=8080`
+    </Note>
+  </Step>
+</Steps>
+
+## Verification
+
+After installation, verify everything is working:
+
+### Check Application Status
+
+```bash
+php artisan about
+```
+
+This displays information about your Laravel installation, environment, and cache status.
+
+### Run Health Checks
+
+```bash
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+These commands optimize the application by caching configuration, routes, and views.
+
+### Test Database Connection
+
+```bash
+php artisan tinker
+```
+
+In Tinker, run:
+
+```php
+DB::connection()->getPdo();
+```
+
+If successful, you'll see PDO connection details.
+
+## Optional: Laravel Sail (Docker)
+
+For a Docker-based development environment, use Laravel Sail:
+
+```bash
+# Install Sail
+php artisan sail:install
+
+# Start containers
+./vendor/bin/sail up -d
+
+# Run migrations
+./vendor/bin/sail artisan migrate
+
+# Seed database
+./vendor/bin/sail artisan db:seed
+```
+
+Sail provides MySQL, Redis, and Mailhog containers pre-configured for Laravel development.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Permission Denied Errors">
+    If you encounter permission errors:
+
+    ```bash
+    sudo chmod -R 775 storage bootstrap/cache
+    sudo chown -R $USER:www-data storage bootstrap/cache
+    ```
+  </Accordion>
+
+  <Accordion title="Composer Memory Limit">
+    If Composer runs out of memory:
+
+    ```bash
+    php -d memory_limit=-1 $(which composer) install
+    ```
+  </Accordion>
+
+  <Accordion title="MySQL Connection Refused">
+    Ensure MySQL is running:
+
+    ```bash
+    sudo systemctl start mysql
+    sudo systemctl status mysql
+    ```
+  </Accordion>
+
+  <Accordion title="NPM Installation Fails">
+    Clear npm cache and retry:
+
+    ```bash
+    npm cache clean --force
+    rm -rf node_modules package-lock.json
+    npm install
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Configure environment variables and application settings
+  </Card>
+  <Card title="Database Setup" icon="database" href="/guides/database-setup">
+    Learn about the database schema and migrations
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy to production servers
+  </Card>
+  <Card title="Getting Started" icon="bolt" href="/getting-started">
+    Get started with basic usage
+  </Card>
+</CardGroup>

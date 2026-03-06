@@ -1,0 +1,684 @@
+---
+title: Controllers
+description: HTTP request handling, business logic, and controller architecture in the Bethlemitas platform
+---
+
+## Overview
+
+Controllers in the Bethlemitas platform handle HTTP requests, coordinate business logic, and return responses. The application follows a resource-oriented controller structure organized by user role and functionality.
+
+## Controller Organization
+
+```
+app/Http/Controllers/
+├── auth/
+│   └── AuthController.php          # Authentication & password reset
+├── Controller.php                   # Base controller
+├── PsicoController.php              # Psychologist operations
+├── CreateReferralController.php     # Student referral management
+├── CreateController.php             # User CRUD (coordinador)
+├── CreateGroupController.php        # Group management
+├── CreateDegreeController.php       # Degree management
+├── CreateAreaController.php         # Area management
+└── ProfileController.php            # User profile management
+```
+
+## Authentication Controller
+
+### AuthController
+
+Handles user authentication, logout, and password reset functionality.
+
+```php
+namespace App\Http\Controllers\auth;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Password;
+use App\Models\Users_teacher;
+
+class AuthController extends Controller
+{
+    public function login() {
+        return view('auth.login');
+    }
+
+    public function logout() {
+        Auth::logout();
+        Session::flush();
+        Session::regenerate(true);
+        return redirect()->route('login');
+    }
+}
+```
+
+See app/Http/Controllers/auth/AuthController.php:13-25
+
+#### Authentication with State Check
+
+<Accordion title="Login with Active User Verification">
+```php
+public function authenticate(Request $request) {
+    $request->validate([
+        'number_documment' => 'required',
+        'password' => 'required',
+    ]);
+
+    // SOLO permite login si id_state = 1 (activo)
+    if (Auth::attempt([
+        'number_documment' => $request->number_documment,
+        'password' => $request->password,
+        'id_state' => 1
+    ])) {
+        return redirect()->route('dashboard');
+    }
+
+    // Verificar si existe pero está suspendido
+    $user = Users_teacher::where('number_documment', $request->number_documment)->first();
+
+    if ($user && $user->id_state != 1) {
+        return back()->withErrors([
+            'blocked' => 'Tu cuenta se encuentra suspendida. Comunícate con el Director.'
+        ]);
+    }
+
+    // Credenciales incorrectas
+    return back()
+        ->withErrors(['invalid_credentials' => 'Número de documento ó contraseña son incorrectas'])
+        ->withInput();
+}
+```
+See app/Http/Controllers/auth/AuthController.php:27-56
+
+<Note>
+The authentication process checks both credentials AND user state, preventing suspended users from logging in.
+</Note>
+</Accordion>
+
+#### Password Reset Flow
+
+<Accordion title="Password Reset Methods">
+```php
+public function showForgotPasswordForm()
+{
+    return view('auth.forgot-password');
+}
+
+public function sendResetLink(Request $request)
+{
+    $request->validate([
+        'email' => 'required|email'
+    ]);
+
+    $status = Password::sendResetLink(
+        $request->only('email')
+    );
+
+    return $status === Password::RESET_LINK_SENT
+        ? back()->with('status', 'Te hemos enviado un enlace de recuperación a tu correo')
+        : back()->withErrors(['email' => 'No se encontró un usuario con ese correo']);
+}
+
+public function resetPassword(Request $request)
+{
+    $request->validate([
+        'token' => 'required',
+        'email' => 'required|email',
+        'password' => 'required|min:6|confirmed',
+    ]);
+
+    $status = Password::reset(
+        $request->only('email', 'password', 'password_confirmation', 'token'),
+        function ($user, $password) {
+            $user->forceFill([
+                'password' => Hash::make($password),
+            ])->save();
+        }
+    );
+
+    return $status === Password::PASSWORD_RESET
+        ? redirect()->route('login')->with('status', 'Contraseña actualizada correctamente')
+        : back()->withErrors(['email' => 'El enlace es inválido o ya expiró']);
+}
+```
+See app/Http/Controllers/auth/AuthController.php:64-115
+</Accordion>
+
+## Psychologist Controller
+
+### PsicoController
+
+Manages psychologist operations including student lists, referral details, and report creation.
+
+#### Student Filtering by State
+
+```php
+private function studentsByState(Request $request, string $state, 
+                                  string $label, string $routeName)
+{
+    $id_psico = Auth::id();
+
+    $load_degree = Users_load_degree::where('id_user', $id_psico)
+        ->pluck('id_degree')
+        ->toArray();
+
+    $query = Users_student::whereHas('states', function ($q) use ($state) {
+            $q->where('state', $state);
+        })
+        ->whereIn('id_degree', $load_degree);
+
+    if ($request->filled('search')) {
+        $search = $request->search;
+        $query->where(function ($q) use ($search) {
+            $q->where('name', 'LIKE', "%$search%")
+              ->orWhere('last_name', 'LIKE', "%$search%")
+              ->orWhere('number_documment', 'LIKE', "%$search%")
+              ->orWhereRaw("CONCAT(name,' ',last_name) LIKE ?", ["%$search%"]);
+        });
+    }
+
+    $students = $query
+        ->orderBy('name')
+        ->orderBy('last_name')
+        ->paginate(15);
+
+    return view('psycho.listStudentsByState', [
+        'students'   => $students,
+        'stateLabel' => $label,
+        'route'      => route($routeName),
+    ]);
+}
+```
+
+See app/Http/Controllers/PsicoController.php:23-56
+
+<Note>
+Psychologists only see students in grade levels assigned to them through the `users_load_degrees` table.
+</Note>
+
+#### Creating Psychological Reports
+
+<Accordion title="Store Report with File Upload">
+```php
+public function store_report_student(Request $request, string $id)
+{
+    $request->validate([
+        'number_documment' => 'required|digits_between:1,20|unique:users_students,number_documment,' . $id,
+        'name'             => 'required|string',
+        'last_name'        => 'required|string',
+        'degree'           => 'required|exists:degrees,id',
+        'group'            => 'required|exists:groups,id',
+        'age'              => 'required|integer',
+        'state'            => 'required|exists:states,id',
+        'title_report'     => 'required|string',
+        'reason_inquiry'   => 'required|string',
+        'recomendations'   => 'required|string',
+        'annex_one'        => 'nullable|mimes:pdf|max:5120',
+    ]);
+
+    DB::beginTransaction();
+
+    try {
+        $student = Users_student::findOrFail($id);
+
+        $student->update([
+            'number_documment' => $request->number_documment,
+            'name'             => $request->name,
+            'last_name'        => $request->last_name,
+            'id_degree'        => $request->degree,
+            'id_group'         => $request->group,
+            'age'              => $request->age,
+            'id_state'         => $request->state, // Update to PIAR/DUA
+        ]);
+
+        $group = Group::findOrFail($request->group);
+        $director = Users_teacher::where('group_director', $request->group)->first();
+
+        $annexPath = null;
+
+        if ($request->hasFile('annex_one')) {
+            $file = $request->file('annex_one');
+            $studentId = $id;
+            $fileName = 'student_' . $studentId . '_' . now()->format('Ymd_His') . '.pdf';
+
+            $annexPath = $file->storeAs(
+                'annexes/student_' . $studentId,
+                $fileName,
+                'public'
+            );
+        }
+
+        Psychoorientation::create([
+            'psychologist_writes'    => Auth::id(),
+            'id_user_student'        => $id,
+            'age_student'            => $request->age,
+            'group_student'          => $group->group,
+            'director_group_student' => $director
+                ? $director->name . ' ' . $director->last_name
+                : 'No asignado',
+            'title_report'           => $request->title_report,
+            'reason_inquiry'         => $request->reason_inquiry,
+            'recomendations'         => $request->recomendations,
+            'annex_one'              => $annexPath,
+        ]);
+
+        DB::commit();
+
+        return redirect()
+            ->route('index.student.remitted.psico')
+            ->with('success', 'Informe guardado correctamente.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', $e->getMessage());
+    }
+}
+```
+See app/Http/Controllers/PsicoController.php:215-295
+
+<Warning>
+File uploads are stored in the `public` disk under `annexes/student_{id}/` directories with timestamped filenames.
+</Warning>
+</Accordion>
+
+#### Student History
+
+```php
+public function show_student_history(string $id)
+{
+    $student = Users_student::findOrFail($id);
+
+    $referrals = Referral::where('id_user_student', $id)
+        ->orderBy('created_at', 'desc')
+        ->paginate(10);
+
+    $reports = Psychoorientation::where('id_user_student', $id)
+        ->orderBy('created_at', 'desc')
+        ->paginate(10);
+
+    return view('psycho.studentHistory', compact(
+        'student',
+        'referrals',
+        'reports'
+    ));
+}
+```
+
+See app/Http/Controllers/PsicoController.php:301-318
+
+## Referral Controller
+
+### CreateReferralController
+
+Handles student referral creation and management for teachers and psychologists.
+
+#### Creating a Referral
+
+<Accordion title="Store Referral with Email Notification">
+```php
+public function store_referral(Request $request)
+{
+    $id_teacher = Auth::id();
+    $state = State::where('state', 'activo')->firstOrFail();
+
+    $request->validate([
+        'number_documment' => 'required|digits_between:1,20',
+        'name' => 'required',
+        'last_name' => 'required',
+        'degree' => 'required',
+        'group' => 'required',
+        'age' => 'nullable|integer|min:0',
+        'reason_referral' => 'required|string',
+        'observation' => 'required|string',
+        'strategies' => 'required|string',
+    ]);
+
+    $input_number_documment = $request->number_documment;
+    $exist_student = Users_student::with('degree', 'group')
+        ->where('number_documment', $input_number_documment)
+        ->first();
+
+    // Check for psychologist assigned to the degree
+    $degreeLoad = Users_load_degree::where('id_degree', $request->input('degree'))->first();
+
+    if (!$degreeLoad) {
+        return redirect()->back()->with('error', 
+            'No se encontró un psicoorientador asignado para el grado seleccionado, '
+            . 'comunicate con cordinación académica para que asigne a un psicoorientador.');
+    }
+
+    $id_psico = $degreeLoad->id_user;
+    $psico_date = Users_teacher::where('id', $id_psico)->first();
+
+    // Check if student already exists
+    if ($exist_student) {
+        $current_state = $exist_student->id_state;
+        $state_info = State::where('id', $current_state)->firstOrFail();
+
+        if ($state_info->state === 'activo') {
+            return redirect()->back()->with(
+                'info',
+                'El estudiante ya fue remitido y está en revisión por el psicoorientador.'
+            );
+        } elseif ($state_info->state === 'en PIAR') {
+            return redirect()->back()->with(
+                'info',
+                'El estudiante ya está en proceso PIAR.'
+            );
+        }
+        // ... other state checks
+    }
+
+    DB::beginTransaction();
+
+    try {
+        // Create student
+        $user = new Users_student();
+        $user->number_documment = $request->number_documment;
+        $user->name = $request->name;
+        $user->last_name = $request->last_name;
+        $user->age = $request->age;
+        $user->id_degree = $request->degree;
+        $user->id_group = $request->group;
+        $user->sent_by = $id_teacher;
+        $user->id_state = $state->id;
+        $user->assignRole('estudiante');
+        $user->save();
+
+        // Create referral
+        $degreeName = $user->degree->degree;
+
+        $referral = new Referral();
+        $referral->id_user_student = $user->id;
+        $referral->id_user_teacher = $id_teacher;
+        $referral->reason = $request->reason_referral;
+        $referral->observation = $request->observation;
+        $referral->strategies = $request->strategies;
+        $referral->course = $degreeName;
+        $referral->save();
+
+        // Send email notification to psychologist
+        Mail::to($psico_date->email)->queue(new CreatedReferralMail($user, $referral));
+
+        DB::commit();
+
+        return redirect()->back()->with('success', 'Estudiante remitido exitosamente.');
+    } catch (\Exception $e) {
+        DB::rollback();
+        return redirect()->back()->with('error', 'Hubo problemas en el proceso, intentelo nuevamente.');
+    }
+}
+```
+See app/Http/Controllers/CreateReferralController.php:32-127
+
+<Note>
+Referrals automatically notify the assigned psychologist via queued email using Laravel's mail system.
+</Note>
+</Accordion>
+
+#### Listing Referred Students
+
+```php
+public function index_student_remitted(Request $request)
+{
+    $id_teacher = Auth::id();
+
+    $query = Users_student::whereHas('states', function ($q) {
+        $q->whereIn('state', ['activo']);
+    })->where('sent_by', $id_teacher);
+
+    // Search filter
+    if ($request->filled('search')) {
+        $searchTerm = $request->input('search');
+        $query->where(function ($q) use ($searchTerm) {
+            $q->where('name', 'LIKE', '%' . $searchTerm . '%')
+                ->orWhere('last_name', 'LIKE', '%' . $searchTerm . '%')
+                ->orWhere('number_documment', 'LIKE', '%' . $searchTerm . '%')
+                ->orWhereRaw("CONCAT(name, ' ', last_name) LIKE ?", ['%' . $searchTerm . '%']);
+        });
+    }
+
+    $students = $query->with('latestReferral', 'group', 'degree')
+        ->orderBy('name', 'asc')
+        ->orderBy('last_name', 'asc')
+        ->paginate(15);
+
+    return view('teacher.studentListRemitted', compact('students'));
+}
+```
+
+See app/Http/Controllers/CreateReferralController.php:130-158
+
+## User Management Controller
+
+### CreateController
+
+Handles CRUD operations for users (coordinador role only).
+
+#### Creating Teachers
+
+<Accordion title="Store Teacher with Areas and Groups">
+```php
+public function store_user(Request $request)
+{
+    $request->validate([
+        'role' => 'required|exists:roles,id',
+    ]);
+
+    $role = $request->role;
+    $role_name = Role::where('id', $role)->first()->name;
+    $state = State::where('state', 'activo')->firstOrFail();
+
+    if ($role_name == 'docente') {
+        $request->validate([
+            'number_documment' => 'required|digits_between:1,11|unique:users_teachers',
+            'name' => 'required',
+            'last_name' => 'required',
+            'email' => 'required|unique:users_teachers',
+            'areas' => 'required|array',
+            'areas.*' => 'exists:areas,id',
+            'groups' => 'required|array',
+            'groups.*' => 'exists:groups,id',
+            'group_director' => 'nullable|unique:users_teachers',
+            'area_id' => 'required|array',
+            'area_id.*' => 'exists:areas,id',
+            'groups_asig' => 'required|array',
+            'groups_asig.*' => 'required|array',
+            'groups_asig.*.*' => 'required|integer',
+        ]);
+
+        // Verify assigned groups match selected groups
+        foreach ($request->groups_asig as $area_id => $assigned_groups) {
+            foreach ($assigned_groups as $group) {
+                if (!in_array($group, $request->groups)) {
+                    return redirect()->back()->with('error', 
+                        'No se ha podido guardar el registro, compruebe que los grupos '
+                        . 'designados a cada area coincidan con los grupos a cargo del docente.');
+                }
+            }
+        }
+
+        // Verify area not already assigned to group
+        foreach ($request->area_id as $area_id) {
+            if (isset($request->groups_asig[$area_id])) {
+                foreach ($request->groups_asig[$area_id] as $groupId) {
+                    $exists = Teachers_areas_group::where('id_area', $area_id)
+                        ->where('id_group', $groupId)
+                        ->exists();
+                    if ($exists) {
+                        $name_area = Area::find($area_id)->name_area;
+                        $name_group = Group::find($groupId)->group;
+                        return redirect()->back()->with('error', 
+                            '¡Error! El area de ' . $name_area . ' ya es impartida en el grupo ' 
+                            . $name_group . ' por otro docente');
+                    }
+                }
+            }
+        }
+
+        // Create user
+        $user = new Users_teacher();
+        $user->number_documment = $request->input('number_documment');
+        $user->name = $request->input('name');
+        $user->last_name = $request->input('last_name');
+        $user->email = $request->input('email');
+        $user->group_director = $request->input('group_director');
+        $user->id_state = $state->id;
+        $user->password = bcrypt($request->input('number_documment'));
+        $user->assignRole($role_name);
+        $user->save();
+
+        // Save areas
+        foreach ($request->areas as $area) {
+            DB::table('users_load_areas')->insert([
+                'id_user_teacher' => $user->id,
+                'id_area' => $area,
+            ]);
+        }
+
+        // Save groups
+        foreach ($request->groups as $group) {
+            DB::table('users_load_groups')->insert([
+                'id_user_teacher' => $user->id,
+                'id_group' => $group,
+            ]);
+        }
+
+        // Save teachers_areas_groups
+        foreach ($request->area_id as $areaId) {
+            if (isset($request->groups_asig[$areaId])) {
+                foreach ($request->groups_asig[$areaId] as $groupId) {
+                    DB::table('teachers_areas_groups')->insert([
+                        'id_teacher' => $user->id,
+                        'id_area' => $areaId,
+                        'id_group' => $groupId,
+                    ]);
+                }
+            }
+        }
+
+        return redirect()->back()->with('success', 'Usuario creado correctamente.');
+    }
+}
+```
+See app/Http/Controllers/CreateController.php:34-224
+
+<Warning>
+The system validates that subject areas are not assigned to the same group by multiple teachers to prevent scheduling conflicts.
+</Warning>
+</Accordion>
+
+#### Listing Users with Filters
+
+```php
+public function index_users(Request $request)
+{
+    $query = Users_teacher::whereHas('roles', function ($q) {
+        $q->whereIn('name', ['docente', 'psicoorientador']);
+    });
+
+    // Filter by state
+    if ($request->filled('estado') && $request->estado != 'todos') {
+        $query->whereHas('state', function ($q) use ($request) {
+            $q->where('state', $request->estado);
+        });
+    }
+
+    // Search
+    if ($request->filled('search')) {
+        $searchTerm = $request->input('search');
+
+        $query->where(function ($q) use ($searchTerm) {
+            $q->where('name', 'LIKE', "%{$searchTerm}%")
+            ->orWhere('last_name', 'LIKE', "%{$searchTerm}%")
+            ->orWhere('number_documment', 'LIKE', "%{$searchTerm}%")
+            ->orWhereRaw("CONCAT(name, ' ', last_name) LIKE ?", ["%{$searchTerm}%"])
+            ->orWhereHas('areas', function ($q) use ($searchTerm) {
+                $q->where('name_area', 'LIKE', "%{$searchTerm}%");
+            });
+        });
+    }
+
+    $users = $query->with([
+                'groups',
+                'areas',
+                'roles',
+                'state',
+                'loadDegrees.degree'
+            ])
+            ->orderBy('name')
+            ->orderBy('last_name')
+            ->paginate(15)
+            ->withQueryString();
+
+    $userRoles = $users->mapWithKeys(fn ($user) => [
+        $user->id => $user->roles->pluck('name')->all()
+    ]);
+
+    return view('academic.userList', compact('users', 'userRoles'));
+}
+```
+
+See app/Http/Controllers/CreateController.php:303-349
+
+## Best Practices
+
+### Validation
+
+Always validate request data before processing:
+
+```php
+$request->validate([
+    'number_documment' => 'required|digits_between:1,20|unique:users_students',
+    'name' => 'required|string',
+    'age' => 'nullable|integer|min:0',
+    'email' => 'required|email',
+]);
+```
+
+### Transaction Usage
+
+Wrap related database operations in transactions:
+
+```php
+DB::beginTransaction();
+try {
+    // Multiple related operations
+    DB::commit();
+} catch (\Exception $e) {
+    DB::rollback();
+    return back()->with('error', $e->getMessage());
+}
+```
+
+### Eager Loading
+
+Prevent N+1 queries by eager loading relationships:
+
+```php
+$students = $query->with('latestReferral', 'group', 'degree')
+    ->paginate(15);
+```
+
+### Flash Messages
+
+Provide user feedback with flash messages:
+
+```php
+return redirect()->back()->with('success', 'Operación exitosa.');
+return redirect()->back()->with('error', 'Hubo un problema.');
+return redirect()->back()->with('info', 'Información importante.');
+```
+
+### Authorization Checks
+
+Verify user permissions before processing:
+
+```php
+$id_teacher = Auth::id();
+$query = Users_student::where('sent_by', $id_teacher); // Only their students
+```
+
+<Note>
+Controllers rely on middleware for role-based access control, but always verify ownership of resources within methods.
+</Note>

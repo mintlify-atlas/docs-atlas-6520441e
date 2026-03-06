@@ -1,0 +1,334 @@
+---
+title: Architecture Overview
+description: Understanding the Laravel 11 architecture and project structure of the Bethlemitas platform
+---
+
+## Introduction
+
+The Bethlemitas platform is built on **Laravel 11**, following the Model-View-Controller (MVC) architectural pattern. This SaaS application manages student psycho-orientation services with a focus on role-based access control and educational workflows.
+
+## Technology Stack
+
+### Core Framework
+
+- **Laravel Framework**: ^11.9
+- **PHP**: ^8.2
+- **Spatie Laravel Permission**: 6.3 (Role and permission management)
+
+```json
+{
+  "require": {
+    "php": "^8.2",
+    "laravel/framework": "^11.9",
+    "laravel/tinker": "^2.9",
+    "spatie/laravel-permission": "6.3"
+  }
+}
+```
+
+### Laravel 11 Configuration
+
+The application uses Laravel 11's streamlined bootstrap configuration:
+
+```php
+<?php
+// bootstrap/app.php
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+    )
+    ->withMiddleware(function (Middleware $middleware) {
+        //
+    })
+    ->withExceptions(function (Exceptions $exceptions) {
+        //
+    })->create();
+```
+
+## Project Structure
+
+The application follows Laravel's standard directory structure with domain-specific organization:
+
+### Application Layer (`app/`)
+
+```
+app/
+├── Http/
+│   ├── Controllers/
+│   │   ├── auth/
+│   │   │   └── AuthController.php
+│   │   ├── PsicoController.php
+│   │   ├── CreateReferralController.php
+│   │   ├── CreateController.php
+│   │   ├── CreateGroupController.php
+│   │   ├── CreateDegreeController.php
+│   │   ├── CreateAreaController.php
+│   │   └── ProfileController.php
+│   └── Middleware/
+│       ├── Authenticate.php
+│       ├── RoleMiddleware.php
+│       ├── RoleDocenteMiddleware.php
+│       ├── RolePsicoorientadorMiddleware.php
+│       ├── RolePsicoorientadorAndDocenteMiddleware.php
+│       └── PreventBackHistoryMiddleware.php
+├── Models/
+│   ├── Users_teacher.php
+│   ├── Users_student.php
+│   ├── Referral.php
+│   ├── Psychoorientation.php
+│   ├── Group.php
+│   ├── Degree.php
+│   ├── Area.php
+│   ├── State.php
+│   └── ...
+├── Mail/
+└── Providers/
+```
+
+## MVC Architecture
+
+### Model Layer
+
+Eloquent ORM models represent database tables and handle:
+- Data relationships (students, teachers, referrals)
+- Business logic (scopes, accessors, mutators)
+- Database interactions
+
+**Key Models**: Users_teacher, Users_student, Referral, Psychoorientation, Group, Degree, Area
+
+### Controller Layer
+
+Controllers handle HTTP requests and coordinate application flow:
+
+- **AuthController**: Authentication and password reset
+- **PsicoController**: Psychologist operations (reports, student management)
+- **CreateReferralController**: Student referral creation and management
+- **CreateController**: User (teacher/psychologist) CRUD operations
+- **ProfileController**: User profile management
+
+### View Layer
+
+Blade templates render the user interface, organized by role:
+- `auth/`: Login and password reset
+- `teacher/`: Teacher-specific views
+- `psycho/`: Psychologist-specific views
+- `academic/`: Coordinator administrative views
+- `layout/`: Shared layouts and components
+
+## Role-Based Access Control
+
+The platform implements three primary roles using Spatie Laravel Permission:
+
+<Note>
+The application uses `hasRole()` checks throughout controllers and middleware to enforce authorization.
+</Note>
+
+### User Roles
+
+| Role | Description | Key Responsibilities |
+|------|-------------|---------------------|
+| **coordinador** | Academic Coordinator | User management, system configuration |
+| **docente** | Teacher | Student referrals, class management |
+| **psicoorientador** | Psychologist | Student evaluation, reports, PIAR/DUA |
+| **estudiante** | Student | Passive role for student records |
+
+### Route Protection Example
+
+```php
+// Routes protected by RoleMiddleware (coordinador only)
+Route::middleware([RoleMiddleware::class])->group(function () {
+    Route::get('/create/user', [CreateController::class, 'create_user'])
+        ->name('create.user');
+    Route::post('/store/user', [CreateController::class, 'store_user'])
+        ->name('store.user');
+    Route::get('/listing/users', [CreateController::class, 'index_users'])
+        ->name('index.users');
+});
+
+// Routes for both docente and psicoorientador
+Route::middleware([RolePsicoorientadorAndDocenteMiddleware::class])->group(function () {
+    Route::get('/create/referral', [CreateReferralController::class, 'create_referral'])
+        ->name('create.referral');
+    Route::post('/store/referral', [CreateReferralController::class, 'store_referral'])
+        ->name('store.referral');
+});
+```
+
+See routes/web.php:91-150
+
+## Database Architecture
+
+### Core Tables
+
+- **users_teachers**: Teacher and psychologist accounts
+- **users_students**: Student records
+- **referrals**: Student referrals from teachers
+- **psychoorientations**: Psychological evaluation reports
+- **groups**: Academic groups/classes
+- **degrees**: Grade levels
+- **areas**: Subject areas
+- **states**: Student status (activo, en PIAR, en DUA)
+
+### Pivot Tables
+
+- **teachers_areas_groups**: Links teachers to subjects and groups
+- **users_load_degrees**: Assigns psychologists to grade levels
+- **users_load_groups**: Assigns teachers to groups
+- **users_load_areas**: Assigns teachers to subject areas
+
+## Application Flow
+
+### Student Referral Workflow
+
+1. **Teacher creates referral** → `CreateReferralController@store_referral`
+2. **Student record created** with state "activo"
+3. **Email notification** sent to assigned psychologist
+4. **Psychologist reviews** → `PsicoController@detailsReferral`
+5. **Report created** → `PsicoController@store_report_student`
+6. **State updated** to PIAR/DUA if needed
+
+<Accordion title="See complete referral flow code">
+```php
+public function store_referral(Request $request)
+{
+    $id_teacher = Auth::id();
+    $state = State::where('state', 'activo')->firstOrFail();
+
+    // Validation...
+    $request->validate([
+        'number_documment' => 'required|digits_between:1,20',
+        'name' => 'required',
+        'reason_referral' => 'required|string',
+        // ...
+    ]);
+
+    // Check if psychologist assigned to degree
+    $degreeLoad = Users_load_degree::where('id_degree', $request->input('degree'))->first();
+    
+    if (!$degreeLoad) {
+        return redirect()->back()->with('error', 
+            'No se encontró un psicoorientador asignado...');
+    }
+
+    // Create student and referral in transaction
+    DB::beginTransaction();
+    try {
+        $user = new Users_student();
+        $user->number_documment = $request->number_documment;
+        $user->name = $request->name;
+        $user->id_state = $state->id;
+        $user->assignRole('estudiante');
+        $user->save();
+
+        $referral = new Referral();
+        $referral->id_user_student = $user->id;
+        $referral->id_user_teacher = $id_teacher;
+        $referral->reason = $request->reason_referral;
+        $referral->save();
+
+        Mail::to($psico_date->email)->queue(new CreatedReferralMail($user, $referral));
+        DB::commit();
+
+        return redirect()->back()->with('success', 'Estudiante remitido exitosamente.');
+    } catch (\Exception $e) {
+        DB::rollback();
+        return redirect()->back()->with('error', 'Hubo problemas en el proceso...');
+    }
+}
+```
+See app/Http/Controllers/CreateReferralController.php:32-127
+</Accordion>
+
+## Key Design Patterns
+
+### Authentication Guard
+
+The platform uses a single authentication guard for `users_teachers` table with custom middleware:
+
+```php
+// Only active users (id_state = 1) can log in
+if (Auth::attempt([
+    'number_documment' => $request->number_documment,
+    'password' => $request->password,
+    'id_state' => 1
+])) {
+    return redirect()->route('dashboard');
+}
+```
+
+See app/Http/Controllers/auth/AuthController.php:35-42
+
+### Scope Queries
+
+Models use query scopes for reusable filters:
+
+```php
+// In Users_teacher model
+public function scopeActivos($query)
+{
+    return $query->where('id_state', 1);
+}
+
+public function scopePiar($query)
+{
+    return $query->where('id_state', 2);
+}
+
+// Usage:
+$activeTeachers = Users_teacher::activos()->get();
+```
+
+See app/Models/Users_teacher.php:108-117
+
+### Eager Loading
+
+Controllers use eager loading to prevent N+1 queries:
+
+```php
+$students = $query->with('latestReferral', 'group', 'degree')
+    ->orderBy('name', 'asc')
+    ->orderBy('last_name', 'asc')
+    ->paginate(15);
+```
+
+See app/Http/Controllers/CreateReferralController.php:151-154
+
+## Security Features
+
+<Warning>
+All routes except authentication are protected with the `auth` middleware and role-specific middleware.
+</Warning>
+
+### Protection Layers
+
+1. **Authentication**: `Authenticate` middleware checks user login status
+2. **State Verification**: Suspended users (id_state = 2) are automatically logged out
+3. **Role Authorization**: Role-specific middleware prevents unauthorized access
+4. **Cache Prevention**: `PreventBackHistoryMiddleware` prevents browser back-button issues
+5. **CSRF Protection**: Laravel's built-in CSRF protection on all forms
+
+### Middleware Stack
+
+```php
+Route::middleware([PreventBackHistoryMiddleware::class])->group(function () {
+    Route::middleware(['auth'])->group(function () {
+        // All protected routes
+    });
+});
+```
+
+See routes/web.php:60-62
+
+## Next Steps
+
+Explore specific architectural components:
+
+- [Models & Relationships](/development/models) - Database models and Eloquent relationships
+- [Controllers](/development/controllers) - HTTP request handling and business logic
+- [Middleware](/development/middleware) - Authentication and authorization layers

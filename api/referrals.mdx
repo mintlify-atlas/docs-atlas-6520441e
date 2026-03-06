@@ -1,0 +1,908 @@
+---
+title: 'Referrals API'
+description: 'Create and manage student referrals and psychological reports'
+icon: 'file-medical'
+---
+
+## Overview
+
+The Referrals API handles the creation and management of student referrals from teachers to psycho-orientators, as well as psychological reports and follow-ups. This is the core workflow of the Bethlemitas psycho-orientation system.
+
+---
+
+## Create Referral
+
+<Card title="POST /store/referral" icon="paper-plane">
+  Creates a new student referral and student record. Automatically notifies the assigned psycho-orientator via email.
+</Card>
+
+### Endpoint
+
+```
+POST /store/referral
+```
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Docente** or **Psicoorientador** role
+</ParamField>
+
+### Request Parameters
+
+<ParamField body="number_documment" type="string" required>
+  Student's document number (1-20 digits)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Student's first name
+</ParamField>
+
+<ParamField body="last_name" type="string" required>
+  Student's last name
+</ParamField>
+
+<ParamField body="degree" type="integer" required>
+  Degree/grade ID (must exist in degrees table)
+</ParamField>
+
+<ParamField body="group" type="integer" required>
+  Group/class ID (must exist in groups table)
+</ParamField>
+
+<ParamField body="age" type="integer" optional>
+  Student's age (minimum 0)
+</ParamField>
+
+<ParamField body="reason_referral" type="string" required>
+  Detailed reason for the referral
+</ParamField>
+
+<ParamField body="observation" type="string" required>
+  Teacher's observations about the student
+</ParamField>
+
+<ParamField body="strategies" type="string" required>
+  Strategies the teacher has already tried with the student
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://bethlemitas.example.com/store/referral \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -b "laravel_session=your_session_cookie" \
+  -d "number_documment=1122334455" \
+  -d "name=Juan" \
+  -d "last_name=Pérez" \
+  -d "degree=5" \
+  -d "group=3" \
+  -d "age=10" \
+  -d "reason_referral=Dificultades de atención en clase" \
+  -d "observation=El estudiante presenta dificultad para mantener la concentración durante las actividades académicas" \
+  -d "strategies=Se ha implementado trabajo en parejas y refuerzo positivo"
+```
+
+```javascript JavaScript
+const formData = new URLSearchParams({
+  number_documment: '1122334455',
+  name: 'Juan',
+  last_name: 'Pérez',
+  degree: '5',
+  group: '3',
+  age: '10',
+  reason_referral: 'Dificultades de atención en clase',
+  observation: 'El estudiante presenta dificultad para mantener la concentración',
+  strategies: 'Se ha implementado trabajo en parejas y refuerzo positivo'
+});
+
+fetch('https://bethlemitas.example.com/store/referral', {
+  method: 'POST',
+  credentials: 'include',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  },
+  body: formData
+})
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Estudiante remitido exitosamente."
+  }
+  ```
+</ResponseField>
+
+### Error Responses
+
+<ResponseField name="error" type="string">
+  No psycho-orientator assigned to the degree
+  
+  ```json
+  {
+    "error": "No se encontró un psicoorientador asignado para el grado seleccionado, comunicate con cordinación académica para que asigne a un psicoorientador."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="info" type="string">
+  Student already exists and cannot be referred again
+  
+  ```json
+  {
+    "info": "El estudiante ya fue remitido y está en revisión por el psicoorientador."
+  }
+  ```
+  
+  or
+  
+  ```json
+  {
+    "info": "El estudiante ya está en proceso PIAR."
+  }
+  ```
+  
+  or
+  
+  ```json
+  {
+    "info": "El estudiante ya está en proceso DUA."
+  }
+  ```
+</ResponseField>
+
+### Implementation Details
+
+- Creates student record with "activo" state and "estudiante" role
+- Creates referral record linked to student and teacher
+- Automatically determines assigned psycho-orientator based on degree
+- Sends email notification to psycho-orientator (queued)
+- Uses database transaction to ensure data consistency
+- Student's `sent_by` field is set to authenticated teacher's ID
+- Controller: `CreateReferralController@store_referral` (routes/web.php:142-143)
+
+---
+
+## Get Referral Details
+
+<Card title="GET /details/referral/{id}" icon="magnifying-glass">
+  Retrieves complete details of a student referral for psycho-orientator review.
+</Card>
+
+### Endpoint
+
+```
+GET /details/referral/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Student ID (not referral ID)
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://bethlemitas.example.com/details/referral/25 \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/details/referral/25', {
+  method: 'GET',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="info_student" type="object">
+  Complete student information
+  
+  <Expandable title="Student Fields">
+    <ResponseField name="id" type="integer">
+      Student ID
+    </ResponseField>
+    
+    <ResponseField name="number_documment" type="string">
+      Document number
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      First name
+    </ResponseField>
+    
+    <ResponseField name="last_name" type="string">
+      Last name
+    </ResponseField>
+    
+    <ResponseField name="age" type="integer|null">
+      Age
+    </ResponseField>
+    
+    <ResponseField name="id_degree" type="integer">
+      Degree ID
+    </ResponseField>
+    
+    <ResponseField name="id_group" type="integer">
+      Group ID
+    </ResponseField>
+    
+    <ResponseField name="sent_by" type="integer">
+      Teacher ID who referred
+    </ResponseField>
+    
+    <ResponseField name="id_state" type="integer">
+      Current state ID
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="info_referral" type="object">
+  Latest referral information
+  
+  <Expandable title="Referral Fields">
+    <ResponseField name="id" type="integer">
+      Referral ID
+    </ResponseField>
+    
+    <ResponseField name="id_user_student" type="integer">
+      Student ID
+    </ResponseField>
+    
+    <ResponseField name="id_user_teacher" type="integer">
+      Teacher ID
+    </ResponseField>
+    
+    <ResponseField name="reason" type="string">
+      Reason for referral
+    </ResponseField>
+    
+    <ResponseField name="observation" type="string">
+      Teacher's observations
+    </ResponseField>
+    
+    <ResponseField name="strategies" type="string">
+      Strategies attempted
+    </ResponseField>
+    
+    <ResponseField name="course" type="string">
+      Grade/course name
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="timestamp">
+      Referral creation date
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="groups" type="array">
+  Available groups for editing
+</ResponseField>
+
+<ResponseField name="degrees" type="array">
+  Available degrees for editing
+</ResponseField>
+
+### Implementation Details
+
+- Returns the most recent referral for the student
+- Returns 404 if student not found
+- Controller: `PsicoController@detailsReferral` (routes/web.php:173-174)
+
+---
+
+## Update Referral Details
+
+<Card title="PUT /edit/details/referral/{id}" icon="pen-to-square">
+  Updates student and referral information during psycho-orientator review.
+</Card>
+
+### Endpoint
+
+```
+PUT /edit/details/referral/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Student ID
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Parameters
+
+<ParamField body="number_documment" type="string" required>
+  Document number (1-20 digits, unique except for current student)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Student's first name
+</ParamField>
+
+<ParamField body="last_name" type="string" required>
+  Student's last name
+</ParamField>
+
+<ParamField body="degree" type="integer" required>
+  Degree ID
+</ParamField>
+
+<ParamField body="group" type="integer" required>
+  Group ID
+</ParamField>
+
+<ParamField body="age" type="integer" required>
+  Student's age (minimum 0)
+</ParamField>
+
+<ParamField body="reason_referral" type="string" required>
+  Reason for referral
+</ParamField>
+
+<ParamField body="observation" type="string" required>
+  Teacher's observations
+</ParamField>
+
+<ParamField body="strategies" type="string" required>
+  Strategies attempted by teacher
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X PUT https://bethlemitas.example.com/edit/details/referral/25 \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -b "laravel_session=your_session_cookie" \
+  -d "number_documment=1122334455" \
+  -d "name=Juan Carlos" \
+  -d "last_name=Pérez García" \
+  -d "degree=5" \
+  -d "group=3" \
+  -d "age=10" \
+  -d "reason_referral=Dificultades de atención en clase" \
+  -d "observation=Observaciones actualizadas" \
+  -d "strategies=Estrategias implementadas"
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Remisión actualizada correctamente."
+  }
+  ```
+</ResponseField>
+
+### Implementation Details
+
+- Updates both student and latest referral records
+- Updates course name in referral based on selected degree
+- Controller: `PsicoController@update_details_referral` (routes/web.php:176-177)
+
+---
+
+## Create Psychological Report
+
+<Card title="POST /store/report/student/{id}" icon="file-plus">
+  Creates a psychological report for a student and updates their state.
+</Card>
+
+### Endpoint
+
+```
+POST /store/report/student/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Student ID
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Parameters
+
+<ParamField body="number_documment" type="string" required>
+  Document number (1-20 digits, unique except for current student)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Student's first name
+</ParamField>
+
+<ParamField body="last_name" type="string" required>
+  Student's last name
+</ParamField>
+
+<ParamField body="degree" type="integer" required>
+  Degree ID
+</ParamField>
+
+<ParamField body="group" type="integer" required>
+  Group ID
+</ParamField>
+
+<ParamField body="age" type="integer" required>
+  Student's age
+</ParamField>
+
+<ParamField body="state" type="integer" required>
+  New state ID (must be: activo, en PIAR, or en DUA)
+</ParamField>
+
+<ParamField body="title_report" type="string" required>
+  Report title
+</ParamField>
+
+<ParamField body="reason_inquiry" type="string" required>
+  Reason for psychological inquiry
+</ParamField>
+
+<ParamField body="recomendations" type="string" required>
+  Psycho-orientator's recommendations
+</ParamField>
+
+<ParamField body="annex_one" type="file" optional>
+  PDF attachment (max 5MB)
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://bethlemitas.example.com/store/report/student/25 \
+  -H "Content-Type: multipart/form-data" \
+  -b "laravel_session=your_session_cookie" \
+  -F "number_documment=1122334455" \
+  -F "name=Juan" \
+  -F "last_name=Pérez" \
+  -F "degree=5" \
+  -F "group=3" \
+  -F "age=10" \
+  -F "state=3" \
+  -F "title_report=Informe de Evaluación Psicopedagógica" \
+  -F "reason_inquiry=Evaluación de dificultades de atención" \
+  -F "recomendations=Se recomienda seguimiento especializado" \
+  -F "annex_one=@/path/to/report.pdf"
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('number_documment', '1122334455');
+formData.append('name', 'Juan');
+formData.append('last_name', 'Pérez');
+formData.append('degree', '5');
+formData.append('group', '3');
+formData.append('age', '10');
+formData.append('state', '3');
+formData.append('title_report', 'Informe de Evaluación Psicopedagógica');
+formData.append('reason_inquiry', 'Evaluación de dificultades de atención');
+formData.append('recomendations', 'Se recomienda seguimiento especializado');
+formData.append('annex_one', fileInput.files[0]);
+
+fetch('https://bethlemitas.example.com/store/report/student/25', {
+  method: 'POST',
+  credentials: 'include',
+  body: formData
+})
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Informe guardado correctamente."
+  }
+  ```
+  
+  Redirects to `/index/students/remitted/psico`
+</ResponseField>
+
+### Error Responses
+
+<ResponseField name="error" type="string">
+  Returns validation errors or exception messages
+</ResponseField>
+
+### Implementation Details
+
+- Updates student information including state
+- Creates psychological report record
+- Stores PDF annex in `storage/app/public/annexes/student_{id}/`
+- File naming: `student_{id}_{timestamp}.pdf`
+- Automatically retrieves group director information
+- Uses database transaction for data consistency
+- Controller: `PsicoController@store_report_student` (routes/web.php:182-183)
+
+---
+
+## Get Referral History Details
+
+<Card title="GET /history/details/referral/{id}" icon="clock-rotate-left">
+  Retrieves historical referral details from student history.
+</Card>
+
+### Endpoint
+
+```
+GET /history/details/referral/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Referral ID (not student ID)
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://bethlemitas.example.com/history/details/referral/42 \
+  -b "laravel_session=your_session_cookie"
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="referral" type="object">
+  Complete referral record with student relationship
+</ResponseField>
+
+<ResponseField name="student" type="object">
+  Student information at time of referral
+</ResponseField>
+
+<ResponseField name="report" type="object|null">
+  Associated psychological report (if exists)
+</ResponseField>
+
+### Implementation Details
+
+- Eager loads user_student relationship
+- Retrieves latest psychological report for the student
+- Controller: `PsicoController@history_details_referral` (routes/web.php:188-189)
+
+---
+
+## Update Historical Referral
+
+<Card title="PUT /edit/history/details/referral/{id}" icon="pen">
+  Updates a historical referral record.
+</Card>
+
+### Endpoint
+
+```
+PUT /edit/history/details/referral/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Referral ID
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Parameters
+
+<ParamField body="reason" type="string" required>
+  Reason for referral
+</ParamField>
+
+<ParamField body="observation" type="string" required>
+  Teacher's observations
+</ParamField>
+
+<ParamField body="strategies" type="string" required>
+  Strategies attempted
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Historial de remisión actualizado."
+  }
+  ```
+</ResponseField>
+
+### Implementation Details
+
+- Controller: `PsicoController@update_history_details_referral` (routes/web.php:194-195)
+
+---
+
+## Get Report History Details
+
+<Card title="GET /history/details/report/{id}" icon="file-lines">
+  Retrieves historical psychological report details.
+</Card>
+
+### Endpoint
+
+```
+GET /history/details/report/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Psychological report ID
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://bethlemitas.example.com/history/details/report/15 \
+  -b "laravel_session=your_session_cookie"
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="report" type="object">
+  Complete psychological report
+  
+  <Expandable title="Report Fields">
+    <ResponseField name="id" type="integer">
+      Report ID
+    </ResponseField>
+    
+    <ResponseField name="psychologist_writes" type="integer">
+      Psycho-orientator ID
+    </ResponseField>
+    
+    <ResponseField name="id_user_student" type="integer">
+      Student ID
+    </ResponseField>
+    
+    <ResponseField name="age_student" type="integer">
+      Student's age at report time
+    </ResponseField>
+    
+    <ResponseField name="group_student" type="string">
+      Student's group at report time
+    </ResponseField>
+    
+    <ResponseField name="director_group_student" type="string">
+      Group director name
+    </ResponseField>
+    
+    <ResponseField name="title_report" type="string">
+      Report title
+    </ResponseField>
+    
+    <ResponseField name="reason_inquiry" type="string">
+      Reason for inquiry
+    </ResponseField>
+    
+    <ResponseField name="recomendations" type="string">
+      Recommendations
+    </ResponseField>
+    
+    <ResponseField name="annex_one" type="string|null">
+      Path to PDF annex
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="timestamp">
+      Creation date
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="student" type="object">
+  Associated student information
+</ResponseField>
+
+### Implementation Details
+
+- Eager loads user_student relationship
+- Controller: `PsicoController@history_details_report` (routes/web.php:191-192)
+
+---
+
+## Update Historical Report
+
+<Card title="PUT /edit/history/details/report/{id}" icon="pen">
+  Updates a historical psychological report, including PDF annex replacement.
+</Card>
+
+### Endpoint
+
+```
+PUT /edit/history/details/report/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Report ID
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with **Psicoorientador** role
+</ParamField>
+
+### Request Parameters
+
+<ParamField body="title_report" type="string" required>
+  Report title
+</ParamField>
+
+<ParamField body="reason_inquiry" type="string" required>
+  Reason for inquiry
+</ParamField>
+
+<ParamField body="recomendations" type="string" required>
+  Recommendations
+</ParamField>
+
+<ParamField body="annex_one" type="file" optional>
+  New PDF attachment (max 5MB). Replaces existing file if provided.
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X PUT https://bethlemitas.example.com/edit/history/details/report/15 \
+  -H "Content-Type: multipart/form-data" \
+  -b "laravel_session=your_session_cookie" \
+  -F "title_report=Informe Actualizado" \
+  -F "reason_inquiry=Seguimiento de caso" \
+  -F "recomendations=Recomendaciones actualizadas" \
+  -F "annex_one=@/path/to/new_report.pdf"
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Informe actualizado correctamente."
+  }
+  ```
+</ResponseField>
+
+### Implementation Details
+
+- If new annex is uploaded, deletes previous file from storage
+- Stores new file with timestamp: `student_{id}_{timestamp}.pdf`
+- Controller: `PsicoController@update_history_details_report` (routes/web.php:197-198)
+
+---
+
+## Referral Workflow
+
+The complete referral workflow follows these steps:
+
+<Steps>
+  <Step title="Teacher Creates Referral">
+    Teacher identifies student needing support and creates referral via `POST /store/referral`
+  </Step>
+  
+  <Step title="Automatic Assignment">
+    System automatically assigns referral to psycho-orientator based on student's degree
+  </Step>
+  
+  <Step title="Email Notification">
+    Psycho-orientator receives email notification about new referral
+  </Step>
+  
+  <Step title="Review and Update">
+    Psycho-orientator reviews referral details via `GET /details/referral/{id}` and can update via `PUT /edit/details/referral/{id}`
+  </Step>
+  
+  <Step title="Create Report">
+    Psycho-orientator creates psychological report via `POST /store/report/student/{id}`, which updates student state
+  </Step>
+  
+  <Step title="Ongoing Management">
+    Student enters PIAR or DUA program. Teachers can add meeting minutes for students in these programs.
+  </Step>
+</Steps>
+
+---
+
+## File Storage
+
+### PDF Annexes
+
+Psychological report annexes are stored in the public storage:
+
+- **Path**: `storage/app/public/annexes/student_{student_id}/`
+- **Naming**: `student_{student_id}_{timestamp}.pdf`
+- **Max Size**: 5MB
+- **Format**: PDF only
+
+### Accessing Files
+
+To access a stored annex, use the path stored in the `annex_one` field:
+
+```
+https://bethlemitas.example.com/storage/{annex_one}
+```
+
+Example:
+```
+https://bethlemitas.example.com/storage/annexes/student_25/student_25_20260306_143022.pdf
+```
+
+---
+
+## Validation Rules Summary
+
+### Referral Creation
+
+- `number_documment`: 1-20 digits
+- `name`: Required string
+- `last_name`: Required string
+- `degree`: Required, must exist
+- `group`: Required, must exist
+- `age`: Optional integer, minimum 0
+- `reason_referral`: Required string
+- `observation`: Required string
+- `strategies`: Required string
+
+### Psychological Report
+
+- All referral fields +
+- `state`: Required, must be valid state ID
+- `title_report`: Required string
+- `reason_inquiry`: Required string
+- `recomendations`: Required string
+- `annex_one`: Optional PDF, max 5MB

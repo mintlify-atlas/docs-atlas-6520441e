@@ -1,0 +1,640 @@
+---
+title: "Getting Started"
+description: "Quick guide to accessing Bethlemitas, navigating your dashboard, and completing your first task"
+icon: "rocket"
+---
+
+## Welcome to Bethlemitas
+
+This guide will walk you through accessing the platform, understanding your dashboard, and completing your first meaningful action based on your role. Whether you're a coordinator, teacher, or psycho-orientator, you'll be productive within minutes.
+
+<Note>
+**First Time Here?** Contact your institution's coordinator to receive your login credentials. All accounts are created by coordinators with the appropriate role and permissions.
+</Note>
+
+## Step 1: Access the Platform
+
+### Login to Your Account
+
+<Steps>
+  <Step title="Navigate to Login Page">
+    Open your web browser and go to your institution's Bethlemitas URL. You'll see the login page with the Bethlemitas branding.
+  </Step>
+  
+  <Step title="Enter Your Credentials">
+    Enter your **document number** (número de documento) and the **password** provided by your coordinator.
+    
+    ```text
+    Document Number: Your national ID or document number
+    Password: Initial password from coordinator
+    ```
+    
+    <Warning>
+    If you see the error "Tu cuenta se encuentra suspendida" (Your account is suspended), contact your coordinator. Only active accounts (`id_state = 1`) can access the system.
+    </Warning>
+  </Step>
+  
+  <Step title="Access Your Dashboard">
+    After successful authentication, you'll be redirected to your personalized dashboard at `/dashboard`.
+    
+    The authentication is handled by `AuthController::authenticate` (app/Http/Controllers/auth/AuthController.php:27).
+  </Step>
+</Steps>
+
+### Forgot Your Password?
+
+If you've forgotten your password, you can reset it:
+
+<Steps>
+  <Step title="Click 'Forgot Password' Link">
+    On the login page, click the **Olvidé mi contraseña** (Forgot Password) link.
+  </Step>
+  
+  <Step title="Enter Your Email">
+    Provide the email address associated with your account. The system will send a password reset link to this email.
+    
+    ```text
+    Route: /forgot-password
+    Controller: AuthController::sendResetLink
+    ```
+  </Step>
+  
+  <Step title="Check Your Email">
+    Look for an email with the subject line about password reset. Click the link in the email.
+  </Step>
+  
+  <Step title="Set New Password">
+    Enter your new password (minimum 6 characters) and confirm it. You'll be redirected to the login page with a success message.
+  </Step>
+</Steps>
+
+## Step 2: Navigate Your Dashboard
+
+After logging in, your dashboard view and available options depend on your assigned role.
+
+### Dashboard Overview
+
+The main dashboard (`/dashboard`) displays:
+- Welcome message with your name
+- Quick access cards for your most common tasks
+- Navigation menu based on your role permissions
+- Profile access in the top navigation
+
+<Tabs>
+  <Tab title="Coordinator Dashboard">
+    As a **Coordinator**, you'll see administrative options:
+    
+    <CardGroup cols={2}>
+      <Card title="User Management" icon="users">
+        Create and manage teacher and psycho-orientator accounts
+      </Card>
+      <Card title="Academic Structure" icon="sitemap">
+        Configure degrees, groups, and subject areas
+      </Card>
+      <Card title="Assignments" icon="link">
+        Assign teachers to groups/areas and psycho-orientators to grade levels
+      </Card>
+      <Card title="System Overview" icon="chart-bar">
+        View overall system statistics and user activity
+      </Card>
+    </CardGroup>
+    
+    **Available Routes**: All routes under `RoleMiddleware` (routes/web.php:91-114)
+  </Tab>
+  
+  <Tab title="Teacher Dashboard">
+    As a **Teacher (Docente)**, you'll see:
+    
+    <CardGroup cols={2}>
+      <Card title="Create Referral" icon="file-medical">
+        Submit new student referrals for psycho-orientation
+      </Card>
+      <Card title="My Referrals" icon="list-check">
+        View students you've referred and their current status
+      </Card>
+      <Card title="Add Minutes" icon="note-sticky">
+        Add notes for students in PIAR or DUA programs in your classes
+      </Card>
+      <Card title="My Profile" icon="user">
+        Update your email and profile photo
+      </Card>
+    </CardGroup>
+    
+    **Available Routes**: Routes under `RoleDocenteMiddleware` and shared routes (routes/web.php:122-150)
+  </Tab>
+  
+  <Tab title="Psycho-Orientator Dashboard">
+    As a **Psycho-Orientator (Psicoorientador)**, you'll see:
+    
+    <CardGroup cols={2}>
+      <Card title="Pending Referrals" icon="inbox">
+        Review new referrals from teachers in your assigned grades
+      </Card>
+      <Card title="Active Students" icon="users">
+        View all students in your care
+      </Card>
+      <Card title="PIAR Students" icon="clipboard-list">
+        Manage students with individualized adjustment plans
+      </Card>
+      <Card title="DUA Students" icon="universal-access">
+        Track students following universal learning design
+      </Card>
+      <Card title="Create Reports" icon="file-pen">
+        Write psychological orientation reports
+      </Card>
+      <Card title="Student History" icon="clock-rotate-left">
+        Access complete historical records for any student
+      </Card>
+    </CardGroup>
+    
+    **Available Routes**: Routes under `RolePsicoorientadorMiddleware` and shared routes (routes/web.php:158-202)
+  </Tab>
+</Tabs>
+
+## Step 3: Complete Your First Task
+
+Now let's complete a meaningful action based on your role. Follow the guide for your specific role:
+
+<Tabs>
+  <Tab title="For Teachers: Create Your First Referral">
+    Let's walk through creating a student referral when you identify a student who needs psycho-orientation support.
+    
+    ### Creating a Student Referral
+    
+    <Steps>
+      <Step title="Navigate to Create Referral">
+        From your dashboard, click **Create Referral** or navigate to `/create/referral`.
+        
+        You'll see a form to submit student information and referral details.
+      </Step>
+      
+      <Step title="Enter Student Information">
+        Fill in the student's basic information:
+        
+        ```yaml
+        Document Number: Student's national ID (required, 1-20 digits)
+        Name: Student's first name (required)
+        Last Name: Student's last name (required)
+        Age: Student's age (optional, must be positive integer)
+        Degree: Select the student's grade level (required)
+        Group: Select the student's class group (required)
+        ```
+        
+        <Note>
+        The system automatically checks if the student already exists. If they're already in Active, PIAR, or DUA status, you'll receive an informational message and the referral won't be created.
+        </Note>
+      </Step>
+      
+      <Step title="Provide Referral Details">
+        Document why you're referring this student:
+        
+        **Reason for Referral** (`reason_referral`):
+        - Clear description of the behavioral, academic, or emotional concerns
+        - Specific incidents or patterns you've observed
+        
+        **Observations** (`observation`):
+        - Detailed observations about the student's behavior or performance
+        - Contextual information about when and how issues manifest
+        
+        **Strategies Attempted** (`strategies`):
+        - List interventions you've already tried in the classroom
+        - Explain what worked and what didn't
+        
+        <Tip>
+        Be as specific as possible. Quality referrals help psycho-orientators provide better support.
+        </Tip>
+      </Step>
+      
+      <Step title="Submit the Referral">
+        Click the submit button. The system will:
+        
+        1. **Validate** all required fields
+        2. **Create** the student record in the database (if new)
+        3. **Assign** the referral to the appropriate psycho-orientator based on the student's grade
+        4. **Send** an email notification to the assigned psycho-orientator
+        5. **Confirm** success with a message: "Estudiante remitido exitosamente"
+        
+        ```php
+        // Behind the scenes (CreateReferralController.php:90-126)
+        DB::beginTransaction();
+        $user = new Users_student([...]);
+        $referral = new Referral([...]);
+        Mail::to($psico_date->email)->queue(new CreatedReferralMail());
+        DB::commit();
+        ```
+      </Step>
+      
+      <Step title="Monitor Your Referral">
+        Navigate to **My Referrals** (`/index/students/remitted`) to see:
+        - List of all students you've referred
+        - Current status (Active, PIAR, or DUA)
+        - Ability to edit student information if needed
+        
+        You can search by student name, last name, or document number.
+      </Step>
+    </Steps>
+    
+    ### What Happens Next?
+    
+    After you submit a referral:
+    
+    1. The assigned psycho-orientator receives an email notification
+    2. They review your referral details in their dashboard
+    3. They may update the student information or referral if needed
+    4. They create a psychological report with recommendations
+    5. They may change the student's state to PIAR or DUA if specialized intervention is needed
+    6. You can track the student's status in your **My Referrals** list
+    
+    <Card title="Next: Editing Student Information" icon="pen" href="/features/student-referrals">
+      Learn more about managing referrals and editing student information
+    </Card>
+  </Tab>
+  
+  <Tab title="For Psycho-Orientators: Review Your First Referral">
+    Let's walk through reviewing a referral and creating a psychological report.
+    
+    ### Reviewing Pending Referrals
+    
+    <Steps>
+      <Step title="Access Pending Referrals">
+        From your dashboard, click **Pending Referrals** or navigate to `/index/students/remitted/psico`.
+        
+        You'll see a list of students with "activo" status in the grade levels assigned to you.
+        
+        <Note>
+        You only see students from grades you're assigned to via the `users_load_degrees` table. Coordinators configure these assignments.
+        </Note>
+      </Step>
+      
+      <Step title="Review Referral Details">
+        Click on a student to view their referral details (`/details/referral/{id}`).
+        
+        You'll see:
+        - **Student Information**: Name, document number, age, degree, group
+        - **Referring Teacher**: Who submitted the referral
+        - **Referral Date**: When the referral was created
+        - **Reason**: Why the student was referred
+        - **Observations**: Teacher's detailed observations
+        - **Strategies Tried**: Interventions already attempted
+        
+        Review all information carefully to understand the student's needs.
+      </Step>
+      
+      <Step title="Update Referral if Needed">
+        If you need to correct or update any information, you can edit:
+        - Student demographics (name, document, age, degree, group)
+        - Referral details (reason, observation, strategies)
+        
+        Changes are saved when you click **Update**.
+        
+        ```php
+        // PsicoController::update_details_referral (app/Http/Controllers/PsicoController.php:157)
+        $student->update([...]);
+        $referral->update([...]);
+        ```
+      </Step>
+      
+      <Step title="Create Psychological Report">
+        Click **Create Report** or navigate to `/report/student/{id}`.
+        
+        Fill in the comprehensive report form:
+        
+        **Report Title** (`title_report`):
+        - Descriptive title for this psychological orientation report
+        - Example: "Initial Assessment - Behavioral Concerns"
+        
+        **Reason for Inquiry** (`reason_inquiry`):
+        - Detailed analysis of why the student is being evaluated
+        - Your professional assessment of the situation
+        - Any additional observations from your interaction with the student
+        
+        **Recommendations** (`recomendations`):
+        - Specific intervention strategies
+        - Support mechanisms to implement
+        - Follow-up actions required
+        - Timeline for reassessment
+        
+        **Student State** (`state`):
+        - **Active**: Student needs monitoring but no specialized plan yet
+        - **PIAR**: Student requires Individualized Educational Adjustment Plan
+        - **DUA**: Student follows Universal Learning Design principles
+        
+        **Supporting Documentation** (`annex_one`):
+        - Optional: Upload PDF attachments (max 5MB)
+        - Examples: Assessment results, external reports, consent forms
+        - Files stored in `storage/app/public/annexes/student_{id}/`
+        
+        <Tip>
+        Comprehensive reports lead to better interventions. Include specific, actionable recommendations.
+        </Tip>
+      </Step>
+      
+      <Step title="Save the Report">
+        Click **Save Report**. The system will:
+        
+        1. **Update** student information (if changed)
+        2. **Change** student state (if you selected PIAR or DUA)
+        3. **Store** uploaded PDF (if provided)
+        4. **Create** psycho-orientation record in database
+        5. **Redirect** to your pending referrals list with success message
+        
+        ```php
+        // PsicoController::store_report_student (app/Http/Controllers/PsicoController.php:215)
+        DB::beginTransaction();
+        $student->update(['id_state' => $request->state]);
+        Psychoorientation::create([...]);
+        DB::commit();
+        ```
+      </Step>
+      
+      <Step title="Monitor Student Progress">
+        Access the student from the appropriate list:
+        - **Active Students**: `/psico/students/active` (all students in your grades)
+        - **PIAR Students**: `/psico/students/piar` (students with individualized plans)
+        - **DUA Students**: `/psico/students/dua` (universal design students)
+        
+        Click any student to view their complete history.
+      </Step>
+    </Steps>
+    
+    ### Viewing Student History
+    
+    To see a comprehensive timeline of a student's interventions:
+    
+    1. Navigate to any student list
+    2. Click on a student
+    3. Click **View History** or go to `/student/history/{id}`
+    
+    You'll see:
+    - **All Referrals**: Every referral submitted for this student with dates
+    - **All Reports**: Every psychological report you've created
+    - **Chronological Timeline**: Complete audit trail of interventions
+    
+    Click individual referrals or reports to view full details and edit if needed.
+    
+    <Card title="Next: Managing PIAR Students" icon="clipboard-list" href="/features/psycho-orientation">
+      Learn advanced workflows for managing students with specialized intervention plans
+    </Card>
+  </Tab>
+  
+  <Tab title="For Coordinators: Create Your First User">
+    Let's walk through creating a teacher account and assigning them to classes.
+    
+    ### Creating a Teacher Account
+    
+    <Steps>
+      <Step title="Navigate to User Management">
+        From your dashboard, click **Create User** or navigate to `/create/user`.
+        
+        You'll see the user creation form.
+      </Step>
+      
+      <Step title="Enter User Information">
+        Fill in the teacher's details:
+        
+        ```yaml
+        Name: Teacher's first name
+        Last Name: Teacher's last name
+        Email: Valid email address (for password resets)
+        Document Number: National ID number
+        Phone: Contact phone number
+        Password: Initial password (teacher will change on first login)
+        Role: Select "Docente" (Teacher) or "Psicoorientador" (Psycho-orientator)
+        State: Set to "Activo" (Active) to allow immediate login
+        ```
+        
+        <Warning>
+        Users with state "Suspendido" (Suspended) cannot log in. Use this to temporarily disable accounts without deleting them.
+        </Warning>
+      </Step>
+      
+      <Step title="Save the User">
+        Click **Save**. The system creates the user account with the selected role using Spatie Permissions.
+        
+        ```php
+        // CreateController::store_user
+        $user = new Users_teacher([...]);
+        $user->assignRole($request->role); // 'docente' or 'psicoorientador'
+        $user->save();
+        ```
+      </Step>
+      
+      <Step title="Assign Teacher to Classes (For Teachers)">
+        If you created a teacher (not psycho-orientator), assign them to classes:
+        
+        1. Navigate to **Create Group** (`/create/group`)
+        2. Select the teacher, degree, group, and subject area
+        3. Click **Assign**
+        
+        This creates a record in `teachers_areas_groups` linking the teacher to specific classes.
+        
+        Example: Assign "María González" to teach Mathematics to Group 6A.
+      </Step>
+      
+      <Step title="Assign Psycho-orientator to Grades (For Psycho-orientators)">
+        If you created a psycho-orientator, assign them to grade levels:
+        
+        1. The assignment interface (typically in grade management)
+        2. Select the psycho-orientator and the grades they'll cover
+        3. Save the assignment
+        
+        This creates records in `users_load_degrees` so referrals are automatically routed correctly.
+        
+        Example: Assign "Dr. Juan Pérez" to handle grades 6, 7, and 8.
+      </Step>
+    </Steps>
+    
+    ### Managing Academic Structure
+    
+    Before assigning teachers, ensure your academic structure is configured:
+    
+    <AccordionGroup>
+      <Accordion title="Create Degrees (Grade Levels)" icon="layer-group">
+        Navigate to **Create Degree** (`/create/degree`):
+        
+        1. Enter degree name (e.g., "6", "7", "8", "9", "10", "11")
+        2. Click **Save**
+        3. Repeat for all grade levels in your institution
+        
+        Degrees are ordered numerically for display.
+      </Accordion>
+      
+      <Accordion title="Create Groups (Class Sections)" icon="users-rectangle">
+        Navigate to **Create Group** (`/create/group`):
+        
+        1. Enter group name (e.g., "A", "B", "C")
+        2. Click **Save**
+        3. Repeat for all sections
+        
+        Groups combine with degrees (e.g., 6A, 6B, 7A, 7B).
+      </Accordion>
+      
+      <Accordion title="Create Areas (Subject Areas)" icon="book">
+        Navigate to **Create Area** (`/create/area`):
+        
+        1. Enter area name (e.g., "Mathematics", "Science", "Language Arts")
+        2. Click **Save**
+        3. Repeat for all subjects taught
+        
+        Areas are assigned to teachers for specific groups.
+      </Accordion>
+    </AccordionGroup>
+    
+    ### View All Users
+    
+    Navigate to **User List** (`/listing/users`) to see:
+    - All teachers and psycho-orientators
+    - Current roles and status
+    - Edit or suspend accounts as needed
+    
+    You can search by name, document number, or email.
+    
+    <Card title="Next: Advanced User Management" icon="users-gear" href="/features/user-management">
+      Learn how to edit users, manage permissions, and configure complex assignments
+    </Card>
+  </Tab>
+</Tabs>
+
+## Update Your Profile
+
+All users can manage their profile information:
+
+<Steps>
+  <Step title="Access Profile">
+    Click **My Profile** (Mi Perfil) in the navigation menu or go to `/mi-perfil`.
+  </Step>
+  
+  <Step title="Update Email">
+    Change your email address for password reset and notifications.
+    
+    ```text
+    Route: PUT /mi-perfil/email
+    Controller: ProfileController::updateEmail
+    ```
+  </Step>
+  
+  <Step title="Update Profile Photo">
+    Upload a new profile photo to personalize your account.
+    
+    ```text
+    Route: PUT /profile/photo
+    Controller: ProfileController::updatePhoto
+    ```
+    
+    You can also delete your photo with the **Delete Photo** button.
+  </Step>
+</Steps>
+
+## Common Tasks Quick Reference
+
+<AccordionGroup>
+  <Accordion title="Search for Students" icon="magnifying-glass">
+    Most list views (referrals, student lists) include a search box. You can search by:
+    - Student first name
+    - Student last name
+    - Document number
+    - Full name (first + last)
+    
+    The search is case-insensitive and matches partial strings.
+    
+    ```php
+    // Example: PsicoController search implementation (line 120-124)
+    $query->where('name', 'LIKE', "%$search%")
+          ->orWhere('last_name', 'LIKE', "%$search%")
+          ->orWhere('number_documment', 'LIKE', "%$search%");
+    ```
+  </Accordion>
+  
+  <Accordion title="Download PDF Attachments" icon="file-pdf">
+    Psycho-orientators can attach PDFs to reports. To view attachments:
+    
+    1. Open student history
+    2. Click on a report with an attachment
+    3. Click the **Download** link
+    
+    Files are stored in `storage/app/public/annexes/student_{id}/` and served via Laravel's storage link.
+  </Accordion>
+  
+  <Accordion title="Log Out Safely" icon="right-from-bracket">
+    Always log out when finished, especially on shared computers:
+    
+    1. Click **Logout** in the navigation menu
+    2. Or navigate directly to `/logout`
+    
+    This clears your session and prevents unauthorized access.
+    
+    ```php
+    // AuthController::logout (app/Http/Controllers/auth/AuthController.php:19)
+    Auth::logout();
+    Session::flush();
+    Session::regenerate(true);
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Error Messages" icon="circle-exclamation">
+    If you encounter error messages:
+    
+    - **"Tu cuenta se encuentra suspendida"**: Contact your coordinator to reactivate your account
+    - **"El estudiante ya fue remitido"**: Student already has an active referral; check My Referrals list
+    - **"No se encontró un psicoorientador asignado"**: Coordinator needs to assign a psycho-orientator to this grade level
+    - **"Número de documento ó contraseña son incorrectas"**: Check your credentials and try again
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="Role-Specific Guides" icon="book">
+    See detailed guides for your role:
+    - [Coordinator Guide](/roles/coordinator)
+    - [Teacher Guide](/roles/teacher)
+    - [Psycho-Orientator Guide](/roles/psycho-orientator)
+  </Card>
+  
+  <Card title="Feature Documentation" icon="puzzle-piece">
+    Learn about specific features:
+    - [User Management](/features/user-management)
+    - [Student Referrals](/features/student-referrals)
+    - [Psycho-Orientation Reports](/features/psycho-orientation)
+  </Card>
+  
+  <Card title="Technical Documentation" icon="code">
+    For developers and system administrators:
+    - [Installation Guide](/guides/installation)
+    - [Database Setup](/guides/database-setup)
+    - [API Reference](/api/authentication)
+  </Card>
+  
+  <Card title="Troubleshooting" icon="life-ring">
+    Common issues and solutions:
+    - Login problems
+    - Permission errors
+    - Data validation issues
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+Now that you're familiar with the basics, explore advanced features:
+
+<Steps>
+  <Step title="Master Your Role">
+    Read the comprehensive guide for your specific role to learn all available features and workflows.
+  </Step>
+  
+  <Step title="Understand Student States">
+    Learn about PIAR and DUA interventions and when to use each state transition.
+  </Step>
+  
+  <Step title="Explore Reporting">
+    Psycho-orientators: Learn to create comprehensive reports with actionable recommendations.
+  </Step>
+  
+  <Step title="Configure Advanced Settings">
+    Coordinators: Set up complex teacher assignments, manage multiple institutions, and configure system settings.
+  </Step>
+</Steps>
+
+<Card title="Explore Core Features" icon="compass" href="/features/user-management">
+  Dive deeper into Bethlemitas' powerful feature set
+</Card>

@@ -1,0 +1,611 @@
+---
+title: 'Database Setup'
+description: 'Complete guide to database migrations, schema, and seeders'
+icon: 'database'
+---
+
+## Overview
+
+The Bethlemitas platform uses a comprehensive database schema designed for managing educational psycho-orientation services. The database includes tables for users, roles, institutions, psycho-orientation reports, and academic structure.
+
+## Database Requirements
+
+<CardGroup cols={2}>
+  <Card title="MySQL 8.0+" icon="database">
+    Recommended database server
+  </Card>
+  <Card title="MariaDB 10.3+" icon="database">
+    Alternative compatible database
+  </Card>
+  <Card title="UTF-8 Support" icon="language">
+    Character set: utf8mb4
+  </Card>
+  <Card title="Foreign Keys" icon="link">
+    InnoDB engine required
+  </Card>
+</CardGroup>
+
+## Database Configuration
+
+Configure your database connection in `.env`:
+
+```bash .env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=piarmanager
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+The database configuration file is located at `config/database.php`:
+
+```php config/database.php
+'mysql' => [
+    'driver' => 'mysql',
+    'url' => env('DB_URL'),
+    'host' => env('DB_HOST', '127.0.0.1'),
+    'port' => env('DB_PORT', '3306'),
+    'database' => env('DB_DATABASE', 'laravel'),
+    'username' => env('DB_USERNAME', 'root'),
+    'password' => env('DB_PASSWORD', ''),
+    'unix_socket' => env('DB_SOCKET', ''),
+    'charset' => env('DB_CHARSET', 'utf8mb4'),
+    'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+    'prefix' => '',
+    'prefix_indexes' => true,
+    'strict' => true,
+    'engine' => null,
+],
+```
+
+## Creating the Database
+
+<Steps>
+  <Step title="Connect to MySQL">
+    ```bash
+    mysql -u root -p
+    ```
+  </Step>
+
+  <Step title="Create Database">
+    ```sql
+    CREATE DATABASE piarmanager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    ```
+  </Step>
+
+  <Step title="Create User (Optional)">
+    ```sql
+    CREATE USER 'bethlemitas'@'localhost' IDENTIFIED BY 'secure_password';
+    GRANT ALL PRIVILEGES ON piarmanager.* TO 'bethlemitas'@'localhost';
+    FLUSH PRIVILEGES;
+    ```
+  </Step>
+
+  <Step title="Verify Connection">
+    ```bash
+    php artisan tinker
+    ```
+    
+    ```php
+    DB::connection()->getPdo();
+    ```
+  </Step>
+</Steps>
+
+## Running Migrations
+
+### Execute All Migrations
+
+```bash
+php artisan migrate
+```
+
+This runs all migrations in chronological order based on their timestamps.
+
+### Migration Commands
+
+<CodeGroup>
+  ```bash Fresh Migration
+  php artisan migrate:fresh
+  ```
+
+  ```bash Rollback Last Batch
+  php artisan migrate:rollback
+  ```
+
+  ```bash Rollback All
+  php artisan migrate:reset
+  ```
+
+  ```bash Refresh Database
+  php artisan migrate:refresh
+  ```
+
+  ```bash Fresh with Seed
+  php artisan migrate:fresh --seed
+  ```
+</CodeGroup>
+
+<Warning>
+  `migrate:fresh` drops all tables and recreates them. Only use in development!
+</Warning>
+
+## Database Schema
+
+### Core Laravel Tables
+
+#### Cache Tables
+
+```sql
+CREATE TABLE cache (
+    `key` VARCHAR(255) PRIMARY KEY,
+    `value` MEDIUMTEXT NOT NULL,
+    `expiration` INT NOT NULL
+);
+
+CREATE TABLE cache_locks (
+    `key` VARCHAR(255) PRIMARY KEY,
+    `owner` VARCHAR(255) NOT NULL,
+    `expiration` INT NOT NULL
+);
+```
+
+Defined in: `database/migrations/0001_01_01_000001_create_cache_table.php`
+
+#### Jobs and Queue Tables
+
+```sql
+CREATE TABLE jobs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    queue VARCHAR(255) NOT NULL,
+    payload LONGTEXT NOT NULL,
+    attempts TINYINT UNSIGNED NOT NULL,
+    reserved_at INT UNSIGNED NULL,
+    available_at INT UNSIGNED NOT NULL,
+    created_at INT UNSIGNED NOT NULL,
+    INDEX jobs_queue_index (queue)
+);
+```
+
+Defined in: `database/migrations/0001_01_01_000002_create_jobs_table.php`
+
+### Institution and Academic Structure
+
+#### Institution Table
+
+```sql
+CREATE TABLE institution (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    institution VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Stores educational institution information.
+
+Defined in: `database/migrations/2024_10_01_170648_create_institution.php`
+
+#### Degrees Table
+
+```sql
+CREATE TABLE degrees (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    degree VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Stores grade levels (e.g., 1st grade, 2nd grade, etc.).
+
+Defined in: `database/migrations/2024_10_01_155113_create_degrees_table.php`
+
+#### States Table
+
+```sql
+CREATE TABLE states (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    state VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Stores various status options used throughout the system.
+
+Defined in: `database/migrations/2024_10_01_155159_create_states_table.php`
+
+#### Periods Table
+
+```sql
+CREATE TABLE periods (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    period VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Stores academic periods (e.g., 2024-1, 2024-2).
+
+Defined in: `database/migrations/2024_10_01_155216_create_periods_table.php`
+
+#### Areas Table
+
+```sql
+CREATE TABLE areas (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    area VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Stores academic subject areas (e.g., Mathematics, Science, Language).
+
+Defined in: `database/migrations/2024_10_01_155313_create_areas_table.php`
+
+#### Groups Table
+
+```sql
+CREATE TABLE groups (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `group` VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Stores student group/class designations.
+
+Defined in: `database/migrations/2024_10_01_155315_create_groups_table.php`
+
+### User Management
+
+#### Users Teachers Table
+
+```sql
+CREATE TABLE users_teachers (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- Teacher-specific fields
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Defined in: `database/migrations/2024_10_02_130129_create_users_teachers_table.php`
+
+#### Users Students Table
+
+```sql
+CREATE TABLE users_students (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- Student-specific fields
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Defined in: `database/migrations/2024_10_02_130130_create_users_students_table.php`
+
+### Psycho-Orientation System
+
+#### Psychoorientations Table
+
+Core table for psycho-orientation reports:
+
+```sql
+CREATE TABLE psychoorientations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    psychologist_writes BIGINT UNSIGNED NOT NULL,
+    id_user_student BIGINT UNSIGNED NOT NULL,
+    age_student TINYINT NOT NULL,
+    group_student VARCHAR(50) NOT NULL,
+    director_group_student VARCHAR(255) NOT NULL,
+    title_report VARCHAR(255) NOT NULL,
+    reason_inquiry TEXT NOT NULL,
+    recomendations TEXT NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    
+    FOREIGN KEY (psychologist_writes) 
+        REFERENCES users_teachers(id),
+    FOREIGN KEY (id_user_student) 
+        REFERENCES users_students(id)
+);
+```
+
+Defined in: `database/migrations/2024_10_02_130145_create_psychoorientations_table.php`
+
+<Note>
+  The `psychoorientations` table includes foreign keys to link psychologists (teachers) and students.
+</Note>
+
+#### Referrals Table
+
+```sql
+CREATE TABLE referrals (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- Referral fields
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Stores referrals for students requiring additional support.
+
+Defined in: `database/migrations/2024_10_02_130144_create_referrals_table.php`
+
+### Additional Tables
+
+#### Student Characteristics
+
+```sql
+CREATE TABLE student_characteristics (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- Characteristic fields
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Defined in: `database/migrations/2025_08_23_140000_create_student_characteristics_table.php`
+
+#### PIAR Documents
+
+```sql
+CREATE TABLE acta_piars (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- PIAR document fields
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+
+CREATE TABLE agreements (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- Agreement fields
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+```
+
+Defined in:
+- `database/migrations/2025_08_23_140001_create_acta_piars_table.php`
+- `database/migrations/2025_08_23_140002_create_agreements_table.php`
+
+### Permission Tables (Spatie)
+
+The Spatie Laravel Permission package creates these tables:
+
+```sql
+CREATE TABLE roles (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    guard_name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    UNIQUE KEY roles_name_guard_name_unique (name, guard_name)
+);
+
+CREATE TABLE permissions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    guard_name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    UNIQUE KEY permissions_name_guard_name_unique (name, guard_name)
+);
+
+CREATE TABLE model_has_roles (
+    role_id BIGINT UNSIGNED NOT NULL,
+    model_type VARCHAR(255) NOT NULL,
+    model_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (role_id, model_id, model_type),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+```
+
+Defined in: `database/migrations/2024_10_03_133006_create_permission_tables.php`
+
+## Database Seeders
+
+### Running Seeders
+
+```bash
+php artisan db:seed
+```
+
+Run a specific seeder:
+
+```bash
+php artisan db:seed --class=RolSeeder
+```
+
+### Seeder Execution Order
+
+Seeders run in this order (defined in `DatabaseSeeder.php`):
+
+<Steps>
+  <Step title="RolSeeder">
+    Creates system roles and permissions:
+    - `coordinador` (Coordinator)
+    - `docente` (Teacher)
+    - `psicoorientador` (Psycho-orientator)
+    - `estudiante` (Student)
+    
+    Assigns `create_user` permission to coordinador, docente, and psicoorientador roles.
+
+    ```php database/seeders/RolSeeder.php
+    $coordinador = Role::create(['name' => 'coordinador']);
+    $docente = Role::create(['name' => 'docente']);
+    $psicoorientador = Role::create(['name' => 'psicoorientador']);
+    $estudiante = Role::create(['name' => 'estudiante']);
+
+    Permission::create(['name' => 'create_user']);
+
+    $coordinador->givePermissionTo(['create_user']);
+    $docente->givePermissionTo(['create_user']);
+    $psicoorientador->givePermissionTo(['create_user']);
+    ```
+  </Step>
+
+  <Step title="AreasSeeder">
+    Populates academic subject areas.
+  </Step>
+
+  <Step title="DegreeSeeder">
+    Creates grade levels for the institution.
+  </Step>
+
+  <Step title="GroupSeeder">
+    Initializes student groups/classes.
+  </Step>
+
+  <Step title="PeriodSeeder">
+    Sets up academic periods.
+  </Step>
+
+  <Step title="StateSeeder">
+    Populates system status options.
+  </Step>
+
+  <Step title="UserSeeder">
+    Creates initial user accounts for testing.
+  </Step>
+
+  <Step title="DeparmetSeeder">
+    Adds department/region data.
+  </Step>
+</Steps>
+
+### Creating Custom Seeders
+
+Generate a new seeder:
+
+```bash
+php artisan make:seeder InstitutionSeeder
+```
+
+Example seeder structure:
+
+```php
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use App\Models\Institution;
+
+class InstitutionSeeder extends Seeder
+{
+    public function run(): void
+    {
+        Institution::create([
+            'institution' => 'Bethlemitas School',
+        ]);
+    }
+}
+```
+
+## Database Backup and Restore
+
+### Backup Database
+
+```bash
+mysqldump -u root -p piarmanager > backup.sql
+```
+
+### Restore Database
+
+```bash
+mysql -u root -p piarmanager < backup.sql
+```
+
+### Laravel Backup Commands
+
+For production, consider using the `spatie/laravel-backup` package for automated backups.
+
+## Database Maintenance
+
+### Optimize Tables
+
+```bash
+php artisan db:monitor
+```
+
+### Clear Query Cache
+
+```bash
+php artisan cache:clear
+```
+
+### View Database Information
+
+```bash
+php artisan db:show
+php artisan db:table users_students
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Migration Already Exists Error">
+    If you see "Migration already exists" errors:
+
+    ```bash
+    php artisan migrate:reset
+    php artisan migrate
+    ```
+
+    Or check the migrations table:
+
+    ```sql
+    SELECT * FROM migrations;
+    ```
+  </Accordion>
+
+  <Accordion title="Foreign Key Constraint Fails">
+    Ensure tables are created in the correct order. Run:
+
+    ```bash
+    php artisan migrate:fresh
+    ```
+
+    This recreates all tables in the proper order.
+  </Accordion>
+
+  <Accordion title="Seeder Class Not Found">
+    Clear the autoloader cache:
+
+    ```bash
+    composer dump-autoload
+    php artisan db:seed
+    ```
+  </Accordion>
+
+  <Accordion title="Permission Table Already Exists">
+    The permission tables are created by the Spatie package. If you encounter errors:
+
+    ```bash
+    php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+    php artisan migrate:fresh
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Configure database and application settings
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy to production servers
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/authentication">
+    Explore database models via API
+  </Card>
+  <Card title="Installation" icon="download" href="/guides/installation">
+    Return to installation guide
+  </Card>
+</CardGroup>

@@ -1,0 +1,489 @@
+---
+title: Middleware
+description: Authentication, authorization, and request filtering middleware in the Bethlemitas platform
+---
+
+## Overview
+
+Middleware provides a mechanism for filtering HTTP requests entering the application. The Bethlemitas platform uses middleware for authentication, role-based authorization, and security enhancements.
+
+## Middleware Architecture
+
+```
+app/Http/Middleware/
+├── Authenticate.php                              # Custom authentication with state check
+├── RoleMiddleware.php                            # Coordinador access
+├── RoleDocenteMiddleware.php                     # Teacher access
+├── RolePsicoorientadorMiddleware.php             # Psychologist access
+├── RolePsicoorientadorAndDocenteMiddleware.php   # Shared teacher/psychologist access
+└── PreventBackHistoryMiddleware.php              # Cache control for security
+```
+
+## Authentication Middleware
+
+### Authenticate
+
+Extends Laravel's base authentication middleware with custom state verification.
+
+```php
+namespace App\Http\Middleware;
+
+use Illuminate\Auth\Middleware\Authenticate as Middleware;
+use Illuminate\Support\Facades\Auth;
+
+class Authenticate extends Middleware
+{
+    protected function redirectTo($request)
+    {
+        if (! $request->expectsJson()) {
+            return route('login');
+        }
+    }
+
+    public function handle($request, \Closure $next, ...$guards)
+    {
+        $this->authenticate($request, $guards);
+
+        $user = Auth::user();
+
+        // Verificar si está suspendido
+        if ($user && $user->id_state == 2) {
+            Auth::logout();
+
+            return redirect()->route('login')
+                ->withErrors([
+                    'blocked' => 'Tu cuenta se encuentra suspendida. Comunícate con el Director.'
+                ]);
+        }
+
+        return $next($request);
+    }
+}
+```
+
+See app/Http/Middleware/Authenticate.php:8-35
+
+<Warning>
+Users with `id_state = 2` (suspended) are immediately logged out even if they have valid credentials.
+</Warning>
+
+**Key Features:**
+- Redirects unauthenticated users to login
+- Checks user state after authentication
+- Logs out suspended users automatically
+- Returns custom error message for blocked accounts
+
+## Role-Based Middleware
+
+### RoleMiddleware (Coordinador)
+
+Restricts access to coordinators only.
+
+```php
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class RoleMiddleware
+{
+    // Middleware para el rol Coordinador.
+    public function handle(Request $request, Closure $next, ...$roles)
+    {
+        if (!Auth::check() || !Auth::user()->hasRole('coordinador')) {
+            abort(403, 'No tienes permiso para acceder a esta página.');
+        }
+
+        return $next($request);
+    }
+}
+```
+
+See app/Http/Middleware/RoleMiddleware.php:8-21
+
+**Protected Routes:**
+- User management (create, edit, delete users)
+- System configuration (groups, degrees, areas)
+- Administrative reports
+
+### RoleDocenteMiddleware (Teacher)
+
+Restricts access to teachers only.
+
+```php
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class RoleDocenteMiddleware
+{
+    // Middleware para el rol Docente.
+    public function handle(Request $request, Closure $next, ...$roles)
+    {
+        if (!Auth::check() || !Auth::user()->hasRole('docente')) {
+            abort(403, 'No tienes permiso para acceder a esta página.');
+        }
+
+        return $next($request);
+    }
+}
+```
+
+See app/Http/Middleware/RoleDocenteMiddleware.php:10-22
+
+**Protected Routes:**
+- View referred students
+- Add minutes/notes to PIAR students
+
+### RolePsicoorientadorMiddleware (Psychologist)
+
+Restricts access to psychologists only.
+
+```php
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class RolePsicoorientadorMiddleware
+{
+    // Middleware para el rol Psicoorientador.
+    public function handle(Request $request, Closure $next, ...$roles)
+    {
+        if (!Auth::check() || !Auth::user()->hasRole('psicoorientador')) {
+            abort(403, 'No tienes permiso para acceder a esta página.');
+        }
+
+        return $next($request);
+    }
+}
+```
+
+See app/Http/Middleware/RolePsicoorientadorMiddleware.php:10-22
+
+**Protected Routes:**
+- Student listings by state (active, PIAR, DUA)
+- Referral details and editing
+- Psychological report creation
+- Student history viewing
+
+### RolePsicoorientadorAndDocenteMiddleware (Shared)
+
+Allows access to both teachers and psychologists for shared functionality.
+
+```php
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class RolePsicoorientadorAndDocenteMiddleware
+{
+    // Middleware para el rol Docente y Psicoorientador.
+    // Para desarrollar actividades que tienen en común ambos roles.
+    public function handle(Request $request, Closure $next, ...$roles)
+    {
+        if (!Auth::check() || !Auth::user()->hasRole(['docente', 'psicoorientador'])) {
+            abort(403, 'No tienes permiso para acceder a esta página.');
+        }
+
+        return $next($request);
+    }
+}
+```
+
+See app/Http/Middleware/RolePsicoorientadorAndDocenteMiddleware.php:10-22
+
+**Shared Routes:**
+- Create student referrals
+- Edit student information
+- Update student records
+
+<Note>
+This middleware uses Spatie Laravel Permission's `hasRole()` method which accepts both single roles and arrays of roles.
+</Note>
+
+## Security Middleware
+
+### PreventBackHistoryMiddleware
+
+Prevents browser caching to protect sensitive data when users navigate back after logout.
+
+```php
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+class PreventBackHistoryMiddleware
+{
+    /**
+     * Handle an incoming request.
+     */
+    public function handle($request, Closure $next)
+    {
+        $response = $next($request);
+
+        // Aplicar cabeceras de no-caché para todas las respuestas
+        $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', 'Fri, 01 Jan 1990 00:00:00 GMT');
+
+        return $response;
+    }
+}
+```
+
+See app/Http/Middleware/PreventBackHistoryMiddleware.php:9-27
+
+**HTTP Headers Set:**
+
+| Header | Value | Purpose |
+|--------|-------|----------|
+| Cache-Control | no-store, no-cache, must-revalidate, max-age=0 | Prevent all caching |
+| Pragma | no-cache | HTTP/1.0 compatibility |
+| Expires | Fri, 01 Jan 1990 00:00:00 GMT | Force immediate expiration |
+
+<Warning>
+This middleware prevents users from viewing protected pages via browser back button after logout, protecting sensitive student data.
+</Warning>
+
+## Middleware Registration
+
+Middleware is applied to route groups in `routes/web.php`:
+
+### Authentication Routes (No Middleware)
+
+```php
+Route::prefix('/')->group(function () {
+    Route::get('/', [AuthController::class, 'login'])->name('login');
+    Route::post('/', [AuthController::class, 'authenticate'])->name('authenticate');
+    Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
+});
+
+Route::get('/forgot-password', [AuthController::class, 'showForgotPasswordForm'])
+    ->name('password.request');
+
+Route::post('/forgot-password', [AuthController::class, 'sendResetLink'])
+    ->name('password.email');
+```
+
+See routes/web.php:25-41
+
+### Protected Routes (Layered Middleware)
+
+```php
+// Layer 1: Prevent back history
+Route::middleware([PreventBackHistoryMiddleware::class])->group(function () {
+
+    // Layer 2: Authentication
+    Route::middleware(['auth'])->group(function () {
+
+        // Dashboard (all authenticated users)
+        Route::get('/dashboard', function () {
+            return view('layout.homePage');
+        })->name('dashboard');
+
+        // Profile (all authenticated users)
+        Route::get('/mi-perfil', [ProfileController::class, 'index'])
+            ->name('profile');
+
+        // Layer 3: Role-specific routes
+        Route::middleware([RoleMiddleware::class])->group(function () {
+            // Coordinador routes
+        });
+
+        Route::middleware([RoleDocenteMiddleware::class])->group(function () {
+            // Docente routes
+        });
+
+        Route::middleware([RolePsicoorientadorMiddleware::class])->group(function () {
+            // Psicoorientador routes
+        });
+
+        Route::middleware([RolePsicoorientadorAndDocenteMiddleware::class])->group(function () {
+            // Shared routes
+        });
+    });
+});
+```
+
+See routes/web.php:60-203
+
+## Middleware Flow Diagram
+
+```
+Incoming Request
+    |
+    v
+[PreventBackHistoryMiddleware]
+    |
+    v
+[Authenticate]
+    ├─> Not logged in → Redirect to login
+    ├─> id_state = 2 → Logout + Error message
+    └─> Valid user
+        |
+        v
+    [Role Middleware]
+        ├─> RoleMiddleware (coordinador)
+        ├─> RoleDocenteMiddleware (docente)
+        ├─> RolePsicoorientadorMiddleware (psicoorientador)
+        └─> RolePsicoorientadorAndDocenteMiddleware (both)
+            |
+            ├─> Has role → Continue
+            └─> No role → 403 Forbidden
+```
+
+## Authorization Matrix
+
+| Route Group | coordinador | docente | psicoorientador |
+|------------|-------------|---------|------------------|
+| Dashboard | ✓ | ✓ | ✓ |
+| Profile | ✓ | ✓ | ✓ |
+| User Management | ✓ | ✗ | ✗ |
+| System Config (Groups/Degrees/Areas) | ✓ | ✗ | ✗ |
+| Create Referral | ✗ | ✓ | ✓ |
+| Edit Student | ✗ | ✓ | ✓ |
+| View Referred Students (own) | ✗ | ✓ | ✗ |
+| Add Minutes to PIAR | ✗ | ✓ | ✗ |
+| Student Lists by State | ✗ | ✗ | ✓ |
+| Referral Details | ✗ | ✗ | ✓ |
+| Create Reports | ✗ | ✗ | ✓ |
+| Student History | ✗ | ✗ | ✓ |
+
+## Custom Middleware Example
+
+If you need to create custom middleware:
+
+```bash
+php artisan make:middleware CheckStudentAccess
+```
+
+```php
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class CheckStudentAccess
+{
+    public function handle(Request $request, Closure $next)
+    {
+        $studentId = $request->route('id');
+        $user = Auth::user();
+
+        // Verify user has access to this student
+        if ($user->hasRole('docente')) {
+            $student = Users_student::findOrFail($studentId);
+            if ($student->sent_by !== $user->id) {
+                abort(403, 'No tienes acceso a este estudiante.');
+            }
+        }
+
+        return $next($request);
+    }
+}
+```
+
+## Best Practices
+
+### Middleware Order Matters
+
+<Note>
+Middleware executes in the order it's registered. Always apply broader checks (authentication) before specific checks (authorization).
+</Note>
+
+**Correct Order:**
+1. PreventBackHistoryMiddleware (security headers)
+2. Authenticate (verify login)
+3. Role-specific middleware (verify permissions)
+
+### Use Appropriate HTTP Codes
+
+- **401 Unauthorized**: User not authenticated → Redirect to login
+- **403 Forbidden**: User authenticated but lacks permission → `abort(403)`
+
+### Middleware vs. Controller Checks
+
+**Use Middleware for:**
+- Route-level authorization (entire route groups)
+- Authentication requirements
+- Broad role-based access
+
+**Use Controller Logic for:**
+- Resource ownership verification
+- Fine-grained permissions
+- Business logic authorization
+
+```php
+// Middleware: "Only psychologists can access"
+Route::middleware([RolePsicoorientadorMiddleware::class])->group(...);
+
+// Controller: "Only psychologists assigned to THIS student's grade"
+public function show($studentId)
+{
+    $student = Users_student::findOrFail($studentId);
+    $psychoGrades = Auth::user()->loadDegrees->pluck('id_degree');
+    
+    if (!$psychoGrades->contains($student->id_degree)) {
+        abort(403, 'No tienes acceso a estudiantes de este grado.');
+    }
+}
+```
+
+### Testing Middleware
+
+Test middleware behavior with different user roles:
+
+```php
+// Test unauthorized access
+$response = $this->get('/create/user');
+$response->assertStatus(302); // Redirect to login
+
+// Test forbidden access
+$this->actingAs($docenteUser);
+$response = $this->get('/create/user');
+$response->assertStatus(403); // Coordinador only
+
+// Test authorized access
+$this->actingAs($coordinadorUser);
+$response = $this->get('/create/user');
+$response->assertStatus(200);
+```
+
+## Security Considerations
+
+<Warning>
+Never trust client-side role checks. Always enforce authorization server-side through middleware and controller logic.
+</Warning>
+
+### Defense in Depth
+
+The platform implements multiple security layers:
+
+1. **Authentication**: Verify user identity (Authenticate middleware)
+2. **State Verification**: Check account status (Authenticate middleware)
+3. **Role Authorization**: Verify permissions (Role middleware)
+4. **Resource Ownership**: Verify access rights (Controller logic)
+5. **Cache Prevention**: Protect data after logout (PreventBackHistoryMiddleware)
+
+### Common Vulnerabilities Prevented
+
+- **Session Hijacking**: Middleware verifies auth on every request
+- **Privilege Escalation**: Role middleware prevents unauthorized access
+- **Back Button Exposure**: Cache headers prevent viewing protected pages after logout
+- **Suspended User Access**: State check logs out suspended users immediately
+
+## Related Documentation
+
+- [Architecture Overview](/development/overview) - Application structure and design patterns
+- [Controllers](/development/controllers) - Request handling and business logic
+- [Models](/development/models) - User roles and relationships

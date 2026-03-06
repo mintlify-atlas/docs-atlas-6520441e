@@ -1,0 +1,338 @@
+---
+title: 'Authentication API'
+description: 'Authenticate users and manage sessions in the Bethlemitas platform'
+icon: 'lock'
+---
+
+## Overview
+
+The Bethlemitas platform uses session-based authentication for users. All authenticated routes require an active session and are protected by middleware.
+
+---
+
+## Login
+
+<Card title="POST /" icon="right-to-bracket">
+  Authenticates a user and creates a session. Only active users (id_state = 1) can log in.
+</Card>
+
+### Endpoint
+
+```
+POST /
+```
+
+### Request Parameters
+
+<ParamField body="number_documment" type="string" required>
+  User's document number (1-11 digits)
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://bethlemitas.example.com/ \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "number_documment=1234567890" \
+  -d "password=mySecurePassword"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  },
+  body: new URLSearchParams({
+    number_documment: '1234567890',
+    password: 'mySecurePassword'
+  })
+})
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="redirect">
+  On successful authentication, redirects to `/dashboard`
+</ResponseField>
+
+### Error Responses
+
+<ResponseField name="blocked" type="string">
+  Returned when user account is suspended (id_state != 1)
+  
+  ```json
+  {
+    "blocked": "Tu cuenta se encuentra suspendida. Comunícate con el Director."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="invalid_credentials" type="string">
+  Returned when credentials are incorrect
+  
+  ```json
+  {
+    "invalid_credentials": "Número de documento ó contraseña son incorrectas"
+  }
+  ```
+</ResponseField>
+
+### Implementation Details
+
+- Only users with `id_state = 1` (active) can authenticate
+- Password is validated using Laravel's Hash facade
+- Session is created on successful authentication
+- Controller: `AuthController@authenticate` (routes/web.php:28)
+
+---
+
+## Logout
+
+<Card title="GET /logout" icon="right-from-bracket">
+  Terminates the current user session and clears all session data.
+</Card>
+
+### Endpoint
+
+```
+GET /logout
+```
+
+### Authentication
+
+<ParamField header="Cookie" type="string" required>
+  Valid session cookie required
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://bethlemitas.example.com/logout \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/logout', {
+  method: 'GET',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="redirect">
+  Redirects to `/` (login page)
+</ResponseField>
+
+### Implementation Details
+
+- Calls `Auth::logout()`
+- Flushes all session data with `Session::flush()`
+- Regenerates session token with `Session::regenerate(true)`
+- Controller: `AuthController@logout` (routes/web.php:29)
+
+---
+
+## Password Reset Flow
+
+### Request Password Reset
+
+<Card title="POST /forgot-password" icon="envelope">
+  Sends a password reset link to the user's email.
+</Card>
+
+#### Endpoint
+
+```
+POST /forgot-password
+```
+
+#### Request Parameters
+
+<ParamField body="email" type="string" required>
+  User's registered email address
+</ParamField>
+
+#### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://bethlemitas.example.com/forgot-password \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "email=user@example.com"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/forgot-password', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  },
+  body: new URLSearchParams({
+    email: 'user@example.com'
+  })
+})
+```
+</CodeGroup>
+
+#### Response
+
+<ResponseField name="status" type="string">
+  Success message when reset link is sent
+  
+  ```json
+  {
+    "status": "Te hemos enviado un enlace de recuperación a tu correo"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Error message when email is not found
+  
+  ```json
+  {
+    "email": "No se encontró un usuario con ese correo"
+  }
+  ```
+</ResponseField>
+
+#### Implementation Details
+
+- Uses Laravel's `Password::sendResetLink()` facade
+- Sends email with reset token
+- Controller: `AuthController@sendResetLink` (routes/web.php:40-41)
+
+---
+
+### Reset Password
+
+<Card title="POST /reset-password" icon="key">
+  Resets the user's password using a valid reset token.
+</Card>
+
+#### Endpoint
+
+```
+POST /reset-password
+```
+
+#### Request Parameters
+
+<ParamField body="token" type="string" required>
+  Password reset token from email link
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  New password (minimum 6 characters)
+</ParamField>
+
+<ParamField body="password_confirmation" type="string" required>
+  Password confirmation (must match password)
+</ParamField>
+
+#### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://bethlemitas.example.com/reset-password \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "token=abc123xyz" \
+  -d "email=user@example.com" \
+  -d "password=newSecurePassword" \
+  -d "password_confirmation=newSecurePassword"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/reset-password', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  },
+  body: new URLSearchParams({
+    token: 'abc123xyz',
+    email: 'user@example.com',
+    password: 'newSecurePassword',
+    password_confirmation: 'newSecurePassword'
+  })
+})
+```
+</CodeGroup>
+
+#### Response
+
+<ResponseField name="status" type="string">
+  Success message on password reset
+  
+  ```json
+  {
+    "status": "Contraseña actualizada correctamente"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Error message when token is invalid or expired
+  
+  ```json
+  {
+    "email": "El enlace es inválido o ya expiró"
+  }
+  ```
+</ResponseField>
+
+#### Validation Rules
+
+- `token`: Required
+- `email`: Required, must be valid email format
+- `password`: Required, minimum 6 characters, must be confirmed
+- `password_confirmation`: Must match password
+
+#### Implementation Details
+
+- Uses Laravel's `Password::reset()` facade
+- Password is hashed with `Hash::make()` before saving
+- Token is automatically invalidated after use
+- Controller: `AuthController@resetPassword` (routes/web.php:52-53)
+
+---
+
+## Authentication Middleware
+
+All protected routes require:
+
+1. **PreventBackHistoryMiddleware**: Prevents browser back button after logout
+2. **auth middleware**: Validates active session
+3. **Role-specific middleware**: 
+   - `RoleMiddleware`: Coordinador only
+   - `RoleDocenteMiddleware`: Docente only
+   - `RolePsicoorientadorMiddleware`: Psicoorientador only
+   - `RolePsicoorientadorAndDocenteMiddleware`: Both roles
+
+### Session Requirements
+
+- All authenticated requests must include session cookie
+- Session is validated on each request
+- Inactive sessions redirect to login page
+
+### User States
+
+Users have the following states (id_state):
+
+- `1`: Activo (can log in)
+- `2`: Suspendido (cannot log in)
+
+Only active users can authenticate and access the platform.

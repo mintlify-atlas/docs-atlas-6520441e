@@ -1,0 +1,721 @@
+---
+title: 'Deployment'
+description: 'Complete guide to deploying the Bethlemitas platform to production'
+icon: 'rocket'
+---
+
+## Pre-Deployment Checklist
+
+Before deploying to production, ensure you have completed these tasks:
+
+<Steps>
+  <Step title="Test Locally">
+    Verify the application works correctly in your local environment
+  </Step>
+  
+  <Step title="Review Configuration">
+    Audit all `.env` settings for production appropriateness
+  </Step>
+  
+  <Step title="Database Backup">
+    Create a backup of any existing production database
+  </Step>
+  
+  <Step title="Security Audit">
+    Review security settings and credentials
+  </Step>
+  
+  <Step title="Performance Testing">
+    Test application performance under load
+  </Step>
+</Steps>
+
+## Server Requirements
+
+### Minimum Server Specifications
+
+<CardGroup cols={2}>
+  <Card title="PHP 8.2+" icon="php">
+    With required extensions enabled
+  </Card>
+  <Card title="2GB RAM" icon="memory">
+    Minimum; 4GB recommended
+  </Card>
+  <Card title="MySQL 8.0+" icon="database">
+    Or MariaDB 10.3+
+  </Card>
+  <Card title="Nginx/Apache" icon="server">
+    Web server with SSL support
+  </Card>
+</CardGroup>
+
+### Required PHP Extensions
+
+Verify these extensions are installed:
+
+```bash
+php -m | grep -E 'pdo_mysql|mbstring|xml|bcmath|json|openssl|tokenizer|ctype|fileinfo'
+```
+
+Required extensions:
+- `pdo_mysql`
+- `mbstring`
+- `xml`
+- `bcmath`
+- `json`
+- `openssl`
+- `tokenizer`
+- `ctype`
+- `fileinfo`
+
+## Production Environment Setup
+
+### 1. Server Preparation
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    # Update system
+    sudo apt update && sudo apt upgrade -y
+
+    # Install PHP 8.2
+    sudo apt install -y php8.2 php8.2-fpm php8.2-cli php8.2-mysql \
+        php8.2-mbstring php8.2-xml php8.2-bcmath php8.2-curl \
+        php8.2-zip php8.2-gd
+
+    # Install Composer
+    curl -sS https://getcomposer.org/installer | php
+    sudo mv composer.phar /usr/local/bin/composer
+
+    # Install Node.js 18
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt install -y nodejs
+
+    # Install MySQL
+    sudo apt install -y mysql-server
+    sudo mysql_secure_installation
+    ```
+  </Tab>
+  
+  <Tab title="CentOS/RHEL">
+    ```bash
+    # Update system
+    sudo yum update -y
+
+    # Install PHP 8.2
+    sudo yum install -y php82 php82-fpm php82-cli php82-mysqlnd \
+        php82-mbstring php82-xml php82-bcmath php82-curl php82-zip
+
+    # Install Composer
+    curl -sS https://getcomposer.org/installer | php
+    sudo mv composer.phar /usr/local/bin/composer
+
+    # Install Node.js
+    curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+    sudo yum install -y nodejs
+
+    # Install MySQL
+    sudo yum install -y mysql-server
+    sudo systemctl start mysqld
+    sudo mysql_secure_installation
+    ```
+  </Tab>
+</Tabs>
+
+### 2. Deploy Application Files
+
+<Steps>
+  <Step title="Clone Repository">
+    ```bash
+    cd /var/www
+    sudo git clone <repository-url> bethlemitas
+    cd bethlemitas
+    ```
+  </Step>
+
+  <Step title="Set Ownership">
+    ```bash
+    sudo chown -R www-data:www-data /var/www/bethlemitas
+    sudo chmod -R 755 /var/www/bethlemitas
+    ```
+  </Step>
+
+  <Step title="Install Dependencies">
+    ```bash
+    composer install --optimize-autoloader --no-dev
+    npm ci --production
+    ```
+
+    <Note>
+      The `--no-dev` flag excludes development dependencies for production.
+    </Note>
+  </Step>
+
+  <Step title="Build Assets">
+    ```bash
+    npm run build
+    ```
+  </Step>
+</Steps>
+
+### 3. Configure Production Environment
+
+Create and configure the production `.env` file:
+
+```bash .env
+# Application
+APP_NAME="Bethlemitas PIAR Manager"
+APP_ENV=production
+APP_KEY=base64:YOUR_GENERATED_KEY_HERE
+APP_DEBUG=false
+APP_TIMEZONE=America/Bogota
+APP_URL=https://yourdomain.com
+
+# Security
+BCRYPT_ROUNDS=12
+
+# Localization
+APP_LOCALE=es
+APP_FALLBACK_LOCALE=es
+APP_FAKER_LOCALE=es_ES
+
+# Logging
+LOG_CHANNEL=daily
+LOG_STACK=daily
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=error
+
+# Database
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=piarmanager
+DB_USERNAME=bethlemitas_user
+DB_PASSWORD=STRONG_PASSWORD_HERE
+
+# Session & Cache
+SESSION_DRIVER=redis
+SESSION_LIFETIME=120
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+
+# Redis
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+# Mail
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=noreply@yourdomain.com
+MAIL_FROM_NAME="${APP_NAME}"
+
+# File Storage
+FILESYSTEM_DISK=local
+
+# Broadcasting
+BROADCAST_CONNECTION=log
+```
+
+<Warning>
+  **Critical Security Settings:**
+  - Set `APP_DEBUG=false` in production
+  - Set `APP_ENV=production`
+  - Use a strong database password
+  - Never commit `.env` to version control
+</Warning>
+
+### 4. Generate Application Key
+
+```bash
+php artisan key:generate --force
+```
+
+### 5. Database Setup
+
+<Steps>
+  <Step title="Create Production Database">
+    ```bash
+    mysql -u root -p
+    ```
+
+    ```sql
+    CREATE DATABASE piarmanager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER 'bethlemitas_user'@'localhost' IDENTIFIED BY 'STRONG_PASSWORD';
+    GRANT ALL PRIVILEGES ON piarmanager.* TO 'bethlemitas_user'@'localhost';
+    FLUSH PRIVILEGES;
+    EXIT;
+    ```
+  </Step>
+
+  <Step title="Run Migrations">
+    ```bash
+    php artisan migrate --force
+    ```
+
+    The `--force` flag is required in production.
+  </Step>
+
+  <Step title="Seed Initial Data">
+    ```bash
+    php artisan db:seed --force
+    ```
+
+    This creates:
+    - System roles (coordinador, docente, psicoorientador, estudiante)
+    - Permissions
+    - Initial academic structure
+  </Step>
+</Steps>
+
+### 6. Optimize Application
+
+```bash
+# Cache configuration
+php artisan config:cache
+
+# Cache routes
+php artisan route:cache
+
+# Cache views
+php artisan view:cache
+
+# Optimize autoloader
+composer dump-autoload --optimize
+```
+
+### 7. Set File Permissions
+
+```bash
+# Set proper ownership
+sudo chown -R www-data:www-data /var/www/bethlemitas
+
+# Set directory permissions
+sudo find /var/www/bethlemitas -type d -exec chmod 755 {} \;
+
+# Set file permissions
+sudo find /var/www/bethlemitas -type f -exec chmod 644 {} \;
+
+# Set storage permissions
+sudo chmod -R 775 /var/www/bethlemitas/storage
+sudo chmod -R 775 /var/www/bethlemitas/bootstrap/cache
+
+# Create storage link
+php artisan storage:link
+```
+
+## Web Server Configuration
+
+### Nginx Configuration
+
+Create `/etc/nginx/sites-available/bethlemitas`:
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name yourdomain.com www.yourdomain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name yourdomain.com www.yourdomain.com;
+    root /var/www/bethlemitas/public;
+
+    # SSL Configuration
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    index index.php;
+
+    charset utf-8;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+
+    # Increase upload size
+    client_max_body_size 20M;
+}
+```
+
+Enable the site:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/bethlemitas /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Apache Configuration
+
+Create `/etc/apache2/sites-available/bethlemitas.conf`:
+
+```apache
+<VirtualHost *:80>
+    ServerName yourdomain.com
+    ServerAlias www.yourdomain.com
+    Redirect permanent / https://yourdomain.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName yourdomain.com
+    ServerAlias www.yourdomain.com
+    DocumentRoot /var/www/bethlemitas/public
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/yourdomain.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/yourdomain.com/privkey.pem
+
+    <Directory /var/www/bethlemitas/public>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/bethlemitas-error.log
+    CustomLog ${APACHE_LOG_DIR}/bethlemitas-access.log combined
+</VirtualHost>
+```
+
+Enable required modules and site:
+
+```bash
+sudo a2enmod rewrite ssl
+sudo a2ensite bethlemitas
+sudo apache2ctl configtest
+sudo systemctl reload apache2
+```
+
+## SSL Certificate with Let's Encrypt
+
+```bash
+# Install Certbot
+sudo apt install -y certbot python3-certbot-nginx
+
+# Obtain certificate
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+
+# Test auto-renewal
+sudo certbot renew --dry-run
+```
+
+## Queue Worker Setup
+
+For background job processing, set up a queue worker:
+
+### Create Supervisor Configuration
+
+Create `/etc/supervisor/conf.d/bethlemitas-worker.conf`:
+
+```ini
+[program:bethlemitas-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/bethlemitas/artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www-data
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/var/www/bethlemitas/storage/logs/worker.log
+stopwaitsecs=3600
+```
+
+Start the worker:
+
+```bash
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start bethlemitas-worker:*
+```
+
+## Scheduled Tasks (Cron)
+
+Add Laravel's scheduler to cron:
+
+```bash
+sudo crontab -e -u www-data
+```
+
+Add this line:
+
+```cron
+* * * * * cd /var/www/bethlemitas && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## Monitoring and Logging
+
+### Log Rotation
+
+Create `/etc/logrotate.d/bethlemitas`:
+
+```bash
+/var/www/bethlemitas/storage/logs/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 www-data www-data
+    sharedscripts
+}
+```
+
+### Monitor Application
+
+```bash
+# View logs
+tail -f /var/www/bethlemitas/storage/logs/laravel.log
+
+# Check queue status
+php artisan queue:monitor
+
+# View failed jobs
+php artisan queue:failed
+```
+
+## Database Backups
+
+### Automated Backup Script
+
+Create `/usr/local/bin/backup-bethlemitas.sh`:
+
+```bash
+#!/bin/bash
+
+BACKUP_DIR="/var/backups/bethlemitas"
+DATE=$(date +%Y%m%d_%H%M%S)
+DB_NAME="piarmanager"
+DB_USER="bethlemitas_user"
+DB_PASS="YOUR_PASSWORD"
+
+mkdir -p $BACKUP_DIR
+
+# Database backup
+mysqldump -u $DB_USER -p$DB_PASS $DB_NAME | gzip > $BACKUP_DIR/db_$DATE.sql.gz
+
+# Keep only last 7 days
+find $BACKUP_DIR -name "db_*.sql.gz" -mtime +7 -delete
+```
+
+Make executable and add to cron:
+
+```bash
+sudo chmod +x /usr/local/bin/backup-bethlemitas.sh
+sudo crontab -e
+```
+
+Add:
+
+```cron
+0 2 * * * /usr/local/bin/backup-bethlemitas.sh
+```
+
+## Security Hardening
+
+<Steps>
+  <Step title="Disable Directory Listing">
+    Ensure `.htaccess` or Nginx config prevents directory browsing
+  </Step>
+
+  <Step title="Hide Sensitive Files">
+    ```bash
+    # Add to .gitignore
+    .env
+    .env.backup
+    .phpunit.result.cache
+    ```
+  </Step>
+
+  <Step title="Enable Firewall">
+    ```bash
+    sudo ufw allow 22/tcp
+    sudo ufw allow 80/tcp
+    sudo ufw allow 443/tcp
+    sudo ufw enable
+    ```
+  </Step>
+
+  <Step title="Configure PHP Security">
+    Edit `/etc/php/8.2/fpm/php.ini`:
+
+    ```ini
+    expose_php = Off
+    display_errors = Off
+    log_errors = On
+    error_log = /var/log/php/error.log
+    ```
+  </Step>
+
+  <Step title="Implement Rate Limiting">
+    Laravel includes throttling middleware. Configure in `app/Http/Kernel.php`
+  </Step>
+</Steps>
+
+## Zero-Downtime Deployment
+
+For production updates without downtime:
+
+```bash
+#!/bin/bash
+
+# Enable maintenance mode
+php artisan down --secret="bypass-token"
+
+# Pull latest code
+git pull origin main
+
+# Update dependencies
+composer install --optimize-autoloader --no-dev
+npm ci --production
+npm run build
+
+# Run migrations
+php artisan migrate --force
+
+# Clear and cache
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# Restart queue workers
+php artisan queue:restart
+
+# Disable maintenance mode
+php artisan up
+```
+
+## Performance Optimization
+
+### Enable OPcache
+
+Edit `/etc/php/8.2/fpm/php.ini`:
+
+```ini
+opcache.enable=1
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=10000
+opcache.validate_timestamps=0
+```
+
+### Redis for Caching
+
+Install Redis:
+
+```bash
+sudo apt install -y redis-server
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+```
+
+Configure in `.env`:
+
+```bash
+CACHE_STORE=redis
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=redis
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="500 Internal Server Error">
+    Check logs:
+
+    ```bash
+    tail -f /var/www/bethlemitas/storage/logs/laravel.log
+    tail -f /var/log/nginx/error.log
+    ```
+
+    Verify permissions:
+
+    ```bash
+    sudo chmod -R 775 storage bootstrap/cache
+    ```
+  </Accordion>
+
+  <Accordion title="Database Connection Failed">
+    Test connection:
+
+    ```bash
+    php artisan tinker
+    DB::connection()->getPdo();
+    ```
+
+    Verify credentials in `.env` and MySQL grants.
+  </Accordion>
+
+  <Accordion title="Queue Jobs Not Processing">
+    Restart queue workers:
+
+    ```bash
+    sudo supervisorctl restart bethlemitas-worker:*
+    ```
+
+    Check supervisor logs:
+
+    ```bash
+    tail -f /var/www/bethlemitas/storage/logs/worker.log
+    ```
+  </Accordion>
+
+  <Accordion title="Assets Not Loading">
+    Rebuild assets:
+
+    ```bash
+    npm run build
+    php artisan config:cache
+    ```
+
+    Check Nginx/Apache serves static files correctly.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Fine-tune production configuration
+  </Card>
+  <Card title="Database Setup" icon="database" href="/guides/database-setup">
+    Review database schema and maintenance
+  </Card>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Configure your application settings
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/authentication">
+    Explore API endpoints
+  </Card>
+</CardGroup>

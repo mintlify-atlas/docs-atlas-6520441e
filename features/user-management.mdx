@@ -1,0 +1,298 @@
+---
+title: User Management
+description: Manage teachers and psycho-orientation counselors in the Bethlemitas platform
+---
+
+The User Management feature allows coordinators to create, edit, and manage users with different roles in the educational system. The platform supports two main user types: **teachers (docentes)** and **psycho-orientation counselors (psicoorientadores)**.
+
+## Overview
+
+User management is restricted to users with the **coordinator** role. This feature enables complete lifecycle management of staff accounts, including role assignment, academic area assignment, and grade/group management.
+
+<Note>
+  All new users are created with their document number as the default password. Users should change this password upon first login for security.
+</Note>
+
+## User Roles
+
+The platform supports the following staff roles:
+
+<CardGroup cols={2}>
+  <Card title="Docente (Teacher)" icon="chalkboard-user">
+    Teachers can create student referrals, manage students in their assigned groups, and add progress minutes for students in PIAR or DUA processes.
+  </Card>
+  <Card title="Psicoorientador (Counselor)" icon="user-doctor">
+    Counselors review referrals, create psychological reports, manage student states, and oversee students assigned to specific academic grades.
+  </Card>
+</CardGroup>
+
+## Creating a New User
+
+<Steps>
+  <Step title="Access User Creation Form">
+    Navigate to **Create User** from the coordinator dashboard. The form loads available roles, areas, groups, and degrees from the database.
+    
+    ```php
+    // CreateController.php:22-31
+    public function create_user()
+    {
+        $groups = Group::orderByRaw('CAST(`group` AS UNSIGNED), `group`')->get();
+        $areas = Area::orderBy('name_area', 'asc')->get();
+        $degrees = Degree::orderByRaw('CAST(`degree` AS UNSIGNED), `degree`')->get();
+        $roles = Role::whereNotIn('name', ['estudiante', 'coordinador'])->get();
+
+        return view('academic.createUser', compact('groups', 'areas', 'degrees', 'roles'));
+    }
+    ```
+  </Step>
+
+  <Step title="Select User Role">
+    Choose between **docente** (teacher) or **psicoorientador** (counselor). The form dynamically adjusts based on the selected role.
+    
+    <Warning>
+      The role selection determines which additional fields are required. Teachers need area and group assignments, while counselors need grade assignments.
+    </Warning>
+  </Step>
+
+  <Step title="Enter Basic Information">
+    Provide the following required fields:
+    - **Document Number**: Must be unique and between 1-11 digits
+    - **Name**: User's first name(s)
+    - **Last Name**: User's surname(s)
+    - **Email**: Must be unique in the system
+  </Step>
+
+  <Step title="Configure Role-Specific Assignments">
+    
+    ### For Teachers (Docentes)
+    
+    **Areas and Groups**: Select the academic areas the teacher will teach and the groups they will manage.
+    
+    - **Areas**: Hold Ctrl and select multiple areas (e.g., Mathematics, Science)
+    - **Groups**: Hold Ctrl and select groups the teacher is responsible for
+    - **Group Director** (optional): Assign the teacher as director of a specific group
+    - **Area-Group Assignments**: For each area, specify which groups the teacher will teach
+    
+    <Note>
+      The system validates that no two teachers can teach the same area in the same group to prevent conflicts.
+    </Note>
+    
+    ```php
+    // CreateController.php:163-178
+    // Verification that areas aren't duplicated in groups
+    foreach ($request->area_id as $area_id) {
+        if (isset($request->groups_asig[$area_id])) {
+            foreach ($request->groups_asig[$area_id] as $groupId) {
+                $exists = Teachers_areas_group::where('id_area', $area_id)
+                    ->where('id_group', $groupId)
+                    ->exists();
+                if ($exists) {
+                    $name_area = Area::find($area_id)->name_area;
+                    $name_group = Group::find($groupId)->group;
+                    return redirect()->back()->with('error', '¡Error! El area de ' . $name_area . ' ya es impartida en el grupo ' . $name_group . ' por otro docente');
+                }
+            }
+        }
+    }
+    ```
+    
+    ### For Counselors (Psicoorientadores)
+    
+    **Grade Assignments**: Select the academic grades (degrees) the counselor will oversee.
+    
+    - **Load Degree**: Hold Ctrl and select multiple grades
+    - Each grade can only be assigned to one counselor at a time
+    
+    ```php
+    // CreateController.php:269-274
+    foreach ($request->load_degree as $degree) {
+        $exists = Users_load_degree::where('id_degree', $degree)->exists();
+        if ($exists) {
+            return redirect()->back()->with('error', 'Existen grados que ya están asignados a otro/a psicoorientador/a.');
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Submit and Create User">
+    Click **Submit** to create the user. The system will:
+    - Create the user account with status "activo" (active)
+    - Set the password to the document number (hashed with bcrypt)
+    - Assign the selected role
+    - Save area/group or grade assignments
+    - Display a success confirmation
+  </Step>
+</Steps>
+
+## Viewing All Users
+
+The user list displays all teachers and counselors in a paginated table with filtering capabilities.
+
+### Available Filters
+
+<Accordion title="Filter by Status">
+  Filter users by their account status:
+  - **Activo** (Active): Users who can log in and use the system
+  - **Suspendido** (Suspended): Users whose access has been temporarily disabled
+  - **Todos** (All): Show all users regardless of status
+</Accordion>
+
+<Accordion title="Search Functionality">
+  Search users by:
+  - Name
+  - Last name
+  - Full name (first name + last name)
+  - Document number
+  - Associated area name
+  
+  ```php
+  // CreateController.php:318-329
+  if ($request->filled('search')) {
+      $searchTerm = $request->input('search');
+      
+      $query->where(function ($q) use ($searchTerm) {
+          $q->where('name', 'LIKE', "%{$searchTerm}%")
+          ->orWhere('last_name', 'LIKE', "%{$searchTerm}%")
+          ->orWhere('number_documment', 'LIKE', "%{$searchTerm}%")
+          ->orWhereRaw("CONCAT(name, ' ', last_name) LIKE ?", ["%{$searchTerm}%"])
+          ->orWhereHas('areas', function ($q) use ($searchTerm) {
+              $q->where('name_area', 'LIKE', "%{$searchTerm}%");
+          });
+      });
+  }
+  ```
+</Accordion>
+
+## Editing Users
+
+Coordinators can modify user information and assignments while maintaining data integrity.
+
+<Steps>
+  <Step title="Select User to Edit">
+    From the user list, click the edit icon next to the user you want to modify.
+  </Step>
+
+  <Step title="Modify User Information">
+    Update any of the following:
+    - Document number (must remain unique)
+    - Name and last name
+    - Email address (must remain unique)
+    - Area/group assignments (for teachers)
+    - Grade assignments (for counselors)
+    - Group director assignment (for teachers)
+  </Step>
+
+  <Step title="Save Changes">
+    The system detects whether changes were made and responds accordingly:
+    - **Changes detected**: Updates the database and shows success message
+    - **No changes**: Displays info message indicating no updates were needed
+    
+    <Warning>
+      When updating teacher assignments, the system validates that the new area-group combinations don't conflict with other teachers.
+    </Warning>
+  </Step>
+</Steps>
+
+### Change Detection
+
+The update process intelligently compares current data with new submissions:
+
+```php
+// CreateController.php:421-436
+$nuevos_datos = [
+    'number_documment' => $request->number_documment,
+    'name' => $request->name,
+    'last_name' => $request->last_name,
+    'email' => $request->email,
+    'group_director' => $request->group_director,
+];
+
+// Compare current data with new data
+foreach ($nuevos_datos as $key => $value) {
+    if ($datos_actuales[$key] != $value) {
+        $huboCambios = true;
+        break;
+    }
+}
+```
+
+## Suspending and Activating Users
+
+Coordinators can toggle user account status without deleting accounts.
+
+### How It Works
+
+<CardGroup cols={2}>
+  <Card title="Suspend Active User" icon="user-slash">
+    Click the suspend button on an active user to change their status to "suspendido". They will no longer be able to log in.
+  </Card>
+  <Card title="Activate Suspended User" icon="user-check">
+    Click the activate button on a suspended user to restore their access to the system.
+  </Card>
+</CardGroup>
+
+```php
+// CreateController.php:650-668
+public function destroy_user($id)
+{
+    $user = Users_teacher::findOrFail($id);
+
+    // If active → suspend
+    if ($user->id_state == 1) {
+        $user->id_state = 2;
+        $message = 'Usuario suspendido correctamente';
+    }
+    // If suspended → activate
+    else {
+        $user->id_state = 1;
+        $message = 'Usuario activado correctamente';
+    }
+
+    $user->save();
+
+    return redirect()->back()->with('success', $message);
+}
+```
+
+<Note>
+  User accounts are never permanently deleted. This preserves historical data and allows accounts to be reactivated when needed.
+</Note>
+
+## Validation Rules
+
+The system enforces strict validation rules to maintain data integrity:
+
+| Field | Rule | Notes |
+|-------|------|-------|
+| Document Number | Unique, 1-20 digits | Cannot duplicate existing users |
+| Email | Unique, valid format | Must be a valid email address |
+| Areas (Teachers) | At least one required | Must exist in areas table |
+| Groups (Teachers) | At least one required | Must exist in groups table |
+| Area-Group Assignments | No conflicts | Each area-group pair can only have one teacher |
+| Degrees (Counselors) | At least one required | Each degree can only have one counselor |
+| Group Director | Optional, unique | Only one director per group |
+
+## User Data Structure
+
+Users are stored with the following relationships:
+
+### Teachers
+- **users_teachers** table: Core user information
+- **users_load_areas**: Many-to-many relationship with areas
+- **users_load_groups**: Many-to-many relationship with groups  
+- **teachers_areas_groups**: Specific area-group teaching assignments
+
+### Counselors
+- **users_teachers** table: Core user information
+- **users_load_degrees**: Many-to-many relationship with academic degrees
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Student Referrals" icon="file-medical" href="/features/student-referrals">
+    Teachers create referrals that are routed to counselors based on grade assignments
+  </Card>
+  <Card title="Psycho-Orientation" icon="brain" href="/features/psycho-orientation">
+    Counselors use their grade assignments to access and manage referred students
+  </Card>
+</CardGroup>

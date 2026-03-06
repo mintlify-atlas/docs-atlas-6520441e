@@ -1,0 +1,692 @@
+---
+title: 'Users API'
+description: 'Manage teachers and psycho-orientators in the Bethlemitas platform'
+icon: 'users'
+---
+
+## Overview
+
+The Users API allows coordinators to create, read, update, and manage teachers (docentes) and psycho-orientators (psicoorientadores). All endpoints require authentication and coordinator role.
+
+<Note>
+  All user endpoints require **Coordinador** role (`RoleMiddleware`).
+</Note>
+
+---
+
+## Create User
+
+<Card title="POST /store/user" icon="user-plus">
+  Creates a new teacher or psycho-orientator with their assigned areas, groups, or degrees.
+</Card>
+
+### Endpoint
+
+```
+POST /store/user
+```
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with Coordinador role
+</ParamField>
+
+### Request Parameters - Common Fields
+
+<ParamField body="role" type="integer" required>
+  Role ID (from roles table, excludes 'estudiante' and 'coordinador')
+</ParamField>
+
+<ParamField body="number_documment" type="string" required>
+  Document number (1-11 digits, unique for new users)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  User's first name
+</ParamField>
+
+<ParamField body="last_name" type="string" required>
+  User's last name
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  User's email address (must be unique)
+</ParamField>
+
+### Request Parameters - For Docente Role
+
+<ParamField body="areas" type="array" required>
+  Array of area IDs the teacher is assigned to
+</ParamField>
+
+<ParamField body="groups" type="array" required>
+  Array of group IDs the teacher is responsible for
+</ParamField>
+
+<ParamField body="group_director" type="string" optional>
+  Group ID if the teacher is a group director (must be unique)
+</ParamField>
+
+<ParamField body="area_id" type="array" required>
+  Array of area IDs for teaching assignments
+</ParamField>
+
+<ParamField body="groups_asig" type="object" required>
+  Object mapping area IDs to arrays of group IDs where the area is taught
+  
+  Example:
+  ```json
+  {
+    "1": ["5", "6"],
+    "2": ["5"]
+  }
+  ```
+</ParamField>
+
+### Request Parameters - For Psicoorientador Role
+
+<ParamField body="load_degree" type="array" required>
+  Array of degree IDs assigned to the psycho-orientator (each degree can only be assigned to one psycho-orientator)
+</ParamField>
+
+### Request Example - Docente
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://bethlemitas.example.com/store/user \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -b "laravel_session=your_session_cookie" \
+  -d "role=2" \
+  -d "number_documment=1234567890" \
+  -d "name=María" \
+  -d "last_name=González" \
+  -d "email=maria.gonzalez@bethlemitas.edu" \
+  -d "areas[]=1" \
+  -d "areas[]=2" \
+  -d "groups[]=5" \
+  -d "groups[]=6" \
+  -d "area_id[]=1" \
+  -d "area_id[]=2" \
+  -d "groups_asig[1][]=5" \
+  -d "groups_asig[1][]=6" \
+  -d "groups_asig[2][]=5"
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('role', '2');
+formData.append('number_documment', '1234567890');
+formData.append('name', 'María');
+formData.append('last_name', 'González');
+formData.append('email', 'maria.gonzalez@bethlemitas.edu');
+formData.append('areas[]', '1');
+formData.append('areas[]', '2');
+formData.append('groups[]', '5');
+formData.append('groups[]', '6');
+formData.append('area_id[]', '1');
+formData.append('area_id[]', '2');
+formData.append('groups_asig[1][]', '5');
+formData.append('groups_asig[1][]', '6');
+formData.append('groups_asig[2][]', '5');
+
+fetch('https://bethlemitas.example.com/store/user', {
+  method: 'POST',
+  credentials: 'include',
+  body: formData
+})
+```
+</CodeGroup>
+
+### Request Example - Psicoorientador
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://bethlemitas.example.com/store/user \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -b "laravel_session=your_session_cookie" \
+  -d "role=3" \
+  -d "number_documment=9876543210" \
+  -d "name=Carlos" \
+  -d "last_name=Ramírez" \
+  -d "email=carlos.ramirez@bethlemitas.edu" \
+  -d "load_degree[]=1" \
+  -d "load_degree[]=2" \
+  -d "load_degree[]=3"
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  Success message
+  
+  ```json
+  {
+    "success": "Usuario creado correctamente."
+  }
+  ```
+</ResponseField>
+
+### Error Responses
+
+<ResponseField name="error" type="string">
+  Various validation errors:
+  
+  - "El area de {area_name} ya es impartida en el grupo {group_name} por otro docente"
+  - "No se ha podido guardar el registro, compruebe que los grupos designados a cada area coincidan con los grupos a cargo del docente."
+  - "Existen grados que ya están asignados a otro/a psicoorientador/a."
+</ResponseField>
+
+### Implementation Details
+
+- Default password is set to the user's document number (hashed)
+- User is automatically assigned `id_state = 1` (active)
+- For docentes: Creates relationships in `users_load_areas`, `users_load_groups`, and `teachers_areas_groups` tables
+- For psicoorientadores: Creates relationships in `users_load_degrees` table
+- Controller: `CreateController@store_user` (routes/web.php:94)
+
+---
+
+## List Users
+
+<Card title="GET /listing/users" icon="list">
+  Lists all teachers and psycho-orientators with filtering and search capabilities.
+</Card>
+
+### Endpoint
+
+```
+GET /listing/users
+```
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with Coordinador role
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="estado" type="string" optional>
+  Filter by user state: `activo`, `suspendido`, or `todos` (default)
+</ParamField>
+
+<ParamField query="search" type="string" optional>
+  Search by name, last name, document number, or area name
+</ParamField>
+
+<ParamField query="page" type="integer" optional>
+  Page number for pagination (15 users per page)
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://bethlemitas.example.com/listing/users?estado=activo&search=María" \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/listing/users?estado=activo&search=María', {
+  method: 'GET',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="users" type="array">
+  Paginated array of user objects
+  
+  <Expandable title="User Object">
+    <ResponseField name="id" type="integer">
+      User ID
+    </ResponseField>
+    
+    <ResponseField name="number_documment" type="string">
+      Document number
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      First name
+    </ResponseField>
+    
+    <ResponseField name="last_name" type="string">
+      Last name
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      Email address
+    </ResponseField>
+    
+    <ResponseField name="group_director" type="string|null">
+      Group ID if user is a director
+    </ResponseField>
+    
+    <ResponseField name="state" type="object">
+      State information
+      - `id`: State ID
+      - `state`: State name ("activo" or "suspendido")
+    </ResponseField>
+    
+    <ResponseField name="roles" type="array">
+      Array of role objects
+      - `id`: Role ID
+      - `name`: Role name ("docente" or "psicoorientador")
+    </ResponseField>
+    
+    <ResponseField name="groups" type="array">
+      Array of assigned groups (for docentes)
+    </ResponseField>
+    
+    <ResponseField name="areas" type="array">
+      Array of assigned areas (for docentes)
+    </ResponseField>
+    
+    <ResponseField name="loadDegrees" type="array">
+      Array of assigned degrees (for psicoorientadores)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Implementation Details
+
+- Returns only users with 'docente' or 'psicoorientador' roles
+- Eager loads relationships: groups, areas, roles, state, loadDegrees
+- Ordered alphabetically by name and last name
+- Pagination maintains query string parameters
+- Controller: `CreateController@index_users` (routes/web.php:95)
+
+---
+
+## Get User Details
+
+<Card title="GET /edit/{id}/user" icon="user">
+  Retrieves detailed information for a specific user for editing.
+</Card>
+
+### Endpoint
+
+```
+GET /edit/{id}/user
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  User ID
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with Coordinador role
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://bethlemitas.example.com/edit/15/user \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/edit/15/user', {
+  method: 'GET',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response Schema
+
+<ResponseField name="user" type="object">
+  Complete user object with all relationships
+</ResponseField>
+
+<ResponseField name="selectedAreas" type="array">
+  Array of area objects with id and name
+</ResponseField>
+
+<ResponseField name="selectedGroups" type="array">
+  Array of group IDs
+</ResponseField>
+
+<ResponseField name="selectedDegrees" type="array">
+  Array of degree IDs (for psicoorientadores)
+</ResponseField>
+
+<ResponseField name="groupsForArea" type="array">
+  Array mapping areas to their assigned groups
+  ```json
+  [
+    {
+      "area_id": 1,
+      "groups": [
+        {"id": 5, "group": "5A"},
+        {"id": 6, "group": "5B"}
+      ]
+    }
+  ]
+  ```
+</ResponseField>
+
+### Implementation Details
+
+- Returns 404 if user not found
+- Includes all necessary data for user editing form
+- Controller: `CreateController@edit_user` (routes/web.php:96)
+
+---
+
+## Update User
+
+<Card title="PUT /update/user/{id}" icon="pen-to-square">
+  Updates an existing teacher or psycho-orientator.
+</Card>
+
+### Endpoint
+
+```
+PUT /update/user/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  User ID to update
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with Coordinador role
+</ParamField>
+
+### Request Parameters
+
+Same as Create User endpoint, with the following changes:
+
+- `number_documment`: Must be unique except for the current user
+- `email`: Must be unique except for the current user
+- `group_director`: Must be unique except for the current user (if applicable)
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X PUT https://bethlemitas.example.com/update/user/15 \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -b "laravel_session=your_session_cookie" \
+  -d "number_documment=1234567890" \
+  -d "name=María Fernanda" \
+  -d "last_name=González" \
+  -d "email=maria.gonzalez@bethlemitas.edu" \
+  # ... additional fields based on role
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Usuario actualizado correctamente."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="info" type="string">
+  When no changes were detected
+  
+  ```json
+  {
+    "info": "No hubo cambios en la actualización del usuario."
+  }
+  ```
+</ResponseField>
+
+### Error Responses
+
+<ResponseField name="error" type="string">
+  - "No se ha podido actualizar el registro, compruebe que los grupos designados a cada area coincidan con los grupos a cargo del docente."
+  - "¡Error! La area de {area} ya es impartida en el grupo {group} por otro docente"
+  - Validation errors for unique constraints
+</ResponseField>
+
+### Implementation Details
+
+- Uses database transactions to ensure data consistency
+- Only updates if changes are detected (compares all fields)
+- For docentes: Deletes and recreates area/group relationships
+- For psicoorientadores: Deletes and recreates degree relationships
+- Controller: `CreateController@update_user` (routes/web.php:97)
+
+---
+
+## Suspend/Activate User
+
+<Card title="PUT /delete/user/{id}" icon="ban">
+  Toggles user state between active (1) and suspended (2).
+</Card>
+
+### Endpoint
+
+```
+PUT /delete/user/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  User ID to suspend/activate
+</ParamField>
+
+### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session with Coordinador role
+</ParamField>
+
+### Request Example
+
+<CodeGroup>
+```bash cURL
+curl -X PUT https://bethlemitas.example.com/delete/user/15 \
+  -b "laravel_session=your_session_cookie"
+```
+
+```javascript JavaScript
+fetch('https://bethlemitas.example.com/delete/user/15', {
+  method: 'PUT',
+  credentials: 'include'
+})
+```
+</CodeGroup>
+
+### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Usuario suspendido correctamente"
+  }
+  ```
+  or
+  ```json
+  {
+    "success": "Usuario activado correctamente"
+  }
+  ```
+</ResponseField>
+
+### State Changes
+
+- If `id_state = 1` (active) → Changes to `2` (suspended)
+- If `id_state = 2` (suspended) → Changes to `1` (active)
+
+### Implementation Details
+
+- Suspended users cannot log in
+- Does not delete user data, only changes state
+- Controller: `CreateController@destroy_user` (routes/web.php:98)
+
+---
+
+## User Profile Management
+
+### Get User Profile
+
+<Card title="GET /mi-perfil" icon="id-card">
+  Retrieves the authenticated user's profile information.
+</Card>
+
+#### Endpoint
+
+```
+GET /mi-perfil
+```
+
+#### Authentication
+
+<ParamField header="Authorization" type="session" required>
+  Active session (all roles)
+</ParamField>
+
+#### Response Schema
+
+<ResponseField name="user" type="object">
+  Complete user object
+</ResponseField>
+
+<ResponseField name="roles" type="array">
+  Array of role names
+</ResponseField>
+
+<ResponseField name="degrees" type="array">
+  Assigned degrees (for psicoorientadores)
+</ResponseField>
+
+<ResponseField name="directorGroup" type="object|null">
+  Group information if user is a director
+</ResponseField>
+
+#### Implementation Details
+
+- Controller: `ProfileController@index` (routes/web.php:70-71)
+
+---
+
+### Update Email
+
+<Card title="PUT /mi-perfil/email" icon="envelope">
+  Updates the authenticated user's email address.
+</Card>
+
+#### Endpoint
+
+```
+PUT /mi-perfil/email
+```
+
+#### Request Parameters
+
+<ParamField body="email" type="string" required>
+  New email address (must be unique)
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Current password for verification
+</ParamField>
+
+#### Response
+
+<ResponseField name="success" type="string">
+  ```json
+  {
+    "success": "Correo actualizado correctamente."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="password" type="string">
+  Error when password is incorrect
+  ```json
+  {
+    "password": "La contraseña es incorrecta."
+  }
+  ```
+</ResponseField>
+
+#### Implementation Details
+
+- Controller: `ProfileController@updateEmail` (routes/web.php:73-75)
+
+---
+
+### Update Profile Photo
+
+<Card title="PUT /profile/photo" icon="camera">
+  Uploads or replaces the user's profile photo.
+</Card>
+
+#### Endpoint
+
+```
+PUT /profile/photo
+```
+
+#### Request Parameters
+
+<ParamField body="photo" type="file" required>
+  Image file (jpg, jpeg, or png, max 2MB)
+</ParamField>
+
+#### Response
+
+<ResponseField name="success_photo" type="string">
+  ```json
+  {
+    "success_photo": "Foto de perfil actualizada correctamente."
+  }
+  ```
+</ResponseField>
+
+#### Implementation Details
+
+- Photos stored as `perfil_{number_documment}.{extension}` in `public/Imagenes_Perfil/`
+- Automatically deletes previous photos with different extensions
+- Controller: `ProfileController@updatePhoto` (routes/web.php:77-79)
+
+---
+
+### Delete Profile Photo
+
+<Card title="DELETE /profile/photo" icon="trash">
+  Removes the user's profile photo.
+</Card>
+
+#### Endpoint
+
+```
+DELETE /profile/photo
+```
+
+#### Response
+
+<ResponseField name="success_photo" type="string">
+  ```json
+  {
+    "success_photo": "Foto de perfil eliminada correctamente."
+  }
+  ```
+</ResponseField>
+
+#### Implementation Details
+
+- Deletes all photo formats (jpg, jpeg, png) for the user
+- Controller: `ProfileController@deletePhoto` (routes/web.php:81-83)
