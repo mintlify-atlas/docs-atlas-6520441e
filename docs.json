@@ -81,7 +81,8 @@
               "api/authentication",
               "api/users",
               "api/students",
-              "api/referrals"
+              "api/referrals",
+              "api/academic-structure"
             ]
           }
         ]
