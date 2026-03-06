@@ -1,0 +1,98 @@
+{
+  "projectType": "saas",
+  "projectName": "Bethlemitas",
+  "projectDescription": "Educational management system for student psycho-orientation services and academic tracking",
+  "theme": "linden",
+  "primaryColor": "#040404",
+  "lightColor": "#ef370f",
+  "darkColor": "#f79d72",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "getting-started"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/user-management",
+              "features/student-referrals",
+              "features/psycho-orientation",
+              "features/academic-tracking"
+            ]
+          },
+          {
+            "group": "User Roles",
+            "pages": [
+              "roles/coordinator",
+              "roles/teacher",
+              "roles/psycho-orientator"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/installation",
+              "guides/configuration",
+              "guides/database-setup",
+              "guides/deployment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Architecture",
+            "pages": [
+              "development/overview",
+              "development/models",
+              "development/controllers",
+              "development/middleware"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "api/authentication",
+              "api/users",
+              "api/students",
+              "api/referrals"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Role-based access control (Coordinator, Teacher, Psycho-orientator)",
+    "Student referral management system",
+    "Psycho-orientation reports and tracking",
+    "Academic degree and group management",
+    "Student state tracking (Active, PIAR, DUA)",
+    "Email notifications for referrals",
+    "Password reset functionality",
+    "Profile management with photo uploads"
+  ],
+  "publicApiSurface": [
+    "POST /authenticate - User login",
+    "GET /dashboard - Main dashboard",
+    "POST /store/user - Create new user (Coordinator)",
+    "POST /store/referral - Create student referral",
+    "PUT /accept/student - Accept student to PIAR",
+    "GET /index/students/remitted/psico - List referred students",
+    "POST /store/report/student/{id} - Create psycho-orientation report",
+    "GET /student/history/{id} - View student history",
+    "PUT /profile/photo - Update profile photo",
+    "POST /store/group - Create academic group",
+    "POST /store/degree - Create academic degree",
+    "POST /store/area - Create subject area"
+  ]
+}
